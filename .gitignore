@@ -1,0 +1,14 @@
+# Build output
+snake_gui
+snake
+*.o
+*.obj
+*.exe
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# FUSE leftover from deleted files
+.fuse_hidden*

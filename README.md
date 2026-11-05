@@ -4,12 +4,13 @@ Game Snake untuk desktop dengan tampilan grafis penuh memakai [raylib](https://w
 
 ## Fitur
 
+- Home menu dengan tombol **PLAY**, **FULLSCREEN**, dan **QUIT**.
 - Arena 30×20 sel (720×480 px) + HUD + bar kontrol GUI.
 - Tembus tepi arena (wrap-around) dengan efek ghost saat pindah sisi.
 - Boost tahan SPACE: tick lebih cepat, tetapi ekor memendek tiap 3 tick boost.
 - Obstacle muncul berkala dengan peringatan berkedip sebelum aktif.
 - **Special food** dengan 7 efek acak yang menguntungkan atau merugikan.
-- Mode fullscreen (F11) dengan letterbox scaling, tetap tajam di resolusi apa pun.
+- Mode fullscreen (F11 atau tombol menu) dengan letterbox scaling, tetap tajam di resolusi apa pun.
 - Kontrol GUI: tombol arah, boost, restart, dan quit bisa diklik.
 - High score per sesi dan overlay game over.
 
@@ -51,6 +52,10 @@ Salin `libraylib.dll` (dan DLL runtime MinGW bila ada) ke folder yang sama denga
 
 Workflow `.github/workflows/windows.yml` membangun `snake_gui.exe` di runner Windows pada setiap push ke `main`, dan bisa dijalankan manual dari tab **Actions** → **Build Windows EXE** → **Run workflow**. Unduh `snake_gui-windows-x64.zip` di bagian **Artifacts**, ekstrak, lalu jalankan `snake_gui.exe`. Workflow membundel DLL MinGW yang dibutuhkan.
 
+## Menu Utama
+
+Game dibuka di home menu. **PLAY** / `ENTER` memulai ronde baru, **FULLSCREEN** / `F11` mengganti mode layar, dan **QUIT** / `ESC` keluar. Saat sedang bermain, `ESC` kembali ke menu (skor berjalan disimpan sebagai high score sesi), lalu **PLAY** memulai ronde baru.
+
 ## Kontrol
 
 | Aksi | Keyboard | GUI |
@@ -58,8 +63,9 @@ Workflow `.github/workflows/windows.yml` membangun `snake_gui.exe` di runner Win
 | Belok | `WASD` / panah | Tombol `<` `^` `v` `>` |
 | Boost | tahan `SPACE` | tahan tombol `BOOST` |
 | Restart | `R` (saat game over) | tombol `RESTART` |
-| Fullscreen | `F11` | — |
-| Keluar | `ESC` | tombol `QUIT` |
+| Fullscreen | `F11` | tombol `FULLSCREEN` di menu |
+| Kembali ke menu | `ESC` saat bermain | — |
+| Keluar | `ESC` di menu utama | tombol `QUIT` |
 
 Balik arah 180° diabaikan, dan hanya satu belokan yang dibuffer per tick.
 

@@ -6,9 +6,10 @@
 //   g++ -std=c++17 -Wall -Wextra snake_gui.cpp -o snake_gui.exe -lraylib -lopengl32 -lgdi32 -lwinmm
 //
 // 30x20 grid, 24 px cells, 60 px HUD above the 720x480 arena, plus an 80 px
-// GUI control bar. F11 toggles fullscreen; the 720x620 canvas is letterboxed.
-// Controls: WASD/arrows turn, hold SPACE for boost, R restarts after game over,
-// ESC quits. The bottom bar also exposes clickable buttons for every action.
+// GUI control bar. The game opens on a home menu; F11 or the menu button toggles
+// fullscreen and the 720x620 canvas is letterboxed. While playing, ESC returns
+// to the menu. Controls: WASD/arrows turn, hold SPACE for boost, R restarts
+// after game over. The bottom bar also exposes clickable buttons for every action.
 
 #include "raylib.h"
 
@@ -87,6 +88,8 @@ bool isOpposite(Dir a, Dir b) {
 
 enum class Effect { Bonus, Slow, Haste, Grow, Trim, Cleanse, Curse };
 
+enum class Mode { Menu, Playing };
+
 const char* effectName(Effect e) {
     switch (e) {
         case Effect::Bonus: return "BONUS +50";
@@ -138,6 +141,11 @@ Rectangle boostRect() { return Rectangle{268.0f, static_cast<float>(kBarY + 16),
 Rectangle restartRect() { return Rectangle{404.0f, static_cast<float>(kBarY + 16), 120.0f, 48.0f}; }
 Rectangle quitRect() { return Rectangle{540.0f, static_cast<float>(kBarY + 16), 100.0f, 48.0f}; }
 
+// Home-menu buttons in virtual (canvas) coordinates.
+Rectangle menuPlayRect() { return Rectangle{220.0f, 330.0f, 280.0f, 56.0f}; }
+Rectangle menuFullscreenRect() { return Rectangle{220.0f, 398.0f, 280.0f, 56.0f}; }
+Rectangle menuQuitRect() { return Rectangle{220.0f, 466.0f, 280.0f, 56.0f}; }
+
 struct Game {
     std::deque<Cell> snake;      // front == head
     std::deque<Cell> obstacles;  // solid obstacles, front == oldest
@@ -161,6 +169,8 @@ struct Game {
     bool boostHeld = false;
     bool over = false;
     bool quit = false;
+    Mode mode = Mode::Menu;
+    bool fsRequest = false;
     int score = 0;
     int highScore = 0;  // session only
     float survival = 0.0f;
@@ -200,6 +210,17 @@ struct Game {
         obstacleTimer = 0.0f;
         accumulator = 0.0f;
         spawnFood();
+    }
+
+    void startGame() {
+        reset();
+        mode = Mode::Playing;
+    }
+
+    bool takeFullscreenRequest() {
+        const bool request = fsRequest;
+        fsRequest = false;
+        return request;
     }
 
     bool boostActive() const {
@@ -450,7 +471,23 @@ struct Game {
 
     void handleInput() {
         if (IsKeyPressed(KEY_ESCAPE)) {
-            quit = true;
+            if (mode == Mode::Menu) {
+                quit = true;
+            } else {
+                if (score > highScore) {
+                    highScore = score;
+                }
+                mode = Mode::Menu;
+                boostHeld = false;
+                uiBoostHeld = false;
+            }
+            return;
+        }
+        if (mode == Mode::Menu) {
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) ||
+                IsKeyPressed(KEY_SPACE)) {
+                startGame();
+            }
             return;
         }
         if (over) {
@@ -501,6 +538,18 @@ struct Game {
     void handleUi(const Vector2& mouse, bool down, bool pressed) {
         uiMouse = mouse;
         uiBoostHeld = false;
+        if (mode == Mode::Menu) {
+            if (pressed) {
+                if (CheckCollisionPointRec(mouse, menuPlayRect())) {
+                    startGame();
+                } else if (CheckCollisionPointRec(mouse, menuFullscreenRect())) {
+                    fsRequest = true;
+                } else if (CheckCollisionPointRec(mouse, menuQuitRect())) {
+                    quit = true;
+                }
+            }
+            return;
+        }
         if (over) {
             if (pressed && CheckCollisionPointRec(mouse, restartRect())) {
                 reset();
@@ -588,6 +637,9 @@ struct Game {
 
     // Frame driver: survival score, obstacle timers, and tick accumulation.
     void stepFrame(float dt) {
+        if (mode == Mode::Menu) {
+            return;
+        }
         // Ghost heads keep fading even while the game-over overlay is shown.
         for (size_t i = 0; i < ghosts.size();) {
             ghosts[i].life -= dt;
@@ -713,8 +765,61 @@ struct Game {
                  fontSize, textColor);
     }
 
+    void drawMenu() const {
+        DrawRectangleGradientV(0, 0, kWinW, kWinH, Color{17, 21, 26, 255},
+                               Color{9, 10, 14, 255});
+        for (int x = kCell; x < kWinW; x += kCell) {
+            DrawLine(x, 0, x, kWinH, Color{27, 31, 39, 255});
+        }
+        for (int y = kCell; y < kWinH; y += kCell) {
+            DrawLine(0, y, kWinW, y, Color{27, 31, 39, 255});
+        }
+
+        const char* title = "SNAKE";
+        const int titleSize = 88;
+        const int titleW = MeasureText(title, titleSize);
+        const int titleX = (kWinW - titleW) / 2;
+        DrawText(title, titleX + 4, 124, titleSize, Color{28, 76, 58, 255});
+        DrawText(title, titleX, 120, titleSize, kSnakeHead);
+
+        const char* subtitle = "raylib edition";
+        DrawText(subtitle, (kWinW - MeasureText(subtitle, 20)) / 2, 216, 20, GRAY);
+
+        // Small snake-and-food motif under the title.
+        for (int i = 0; i < 7; ++i) {
+            const float t = static_cast<float>(i) / 6.0f;
+            DrawRectangleRounded(Rectangle{248.0f + static_cast<float>(i * 30), 262.0f,
+                                           22.0f, 22.0f},
+                                 0.35f, 8, lerpColor(kSnakeTail, kSnakeHead, t));
+        }
+        const float headX = 248.0f + 6.0f * 30.0f;
+        DrawCircle(static_cast<int>(headX) + 15, 268, 2.2f, kEye);
+        DrawCircle(static_cast<int>(headX) + 15, 278, 2.2f, kEye);
+        DrawCircle(248 + 7 * 30 + 12, 273, 7.0f, kFood);
+
+        const bool fs = IsWindowFullscreen();
+        drawButton(menuPlayRect(), "PLAY", true, false,
+                   CheckCollisionPointRec(uiMouse, menuPlayRect()));
+        drawButton(menuFullscreenRect(), fs ? "FULLSCREEN: ON" : "FULLSCREEN: OFF", true, fs,
+                   CheckCollisionPointRec(uiMouse, menuFullscreenRect()));
+        drawButton(menuQuitRect(), "QUIT", true, false,
+                   CheckCollisionPointRec(uiMouse, menuQuitRect()));
+
+        if (highScore > 0) {
+            const std::string best = "Best this session: " + std::to_string(highScore);
+            DrawText(best.c_str(), (kWinW - MeasureText(best.c_str(), 16)) / 2, 548, 16, GRAY);
+        }
+        const char* hint = "ENTER / PLAY to start  |  F11 fullscreen  |  ESC quit";
+        DrawText(hint, (kWinW - MeasureText(hint, 14)) / 2, 586, 14,
+                 Color{120, 124, 136, 255});
+    }
+
     void draw() const {
         ClearBackground(kBg);
+        if (mode == Mode::Menu) {
+            drawMenu();
+            return;
+        }
 
         // Arena background and subtle grid.
         DrawRectangle(0, kHud, kArenaW, kArenaH, kArenaBg);
@@ -807,7 +912,7 @@ struct Game {
         drawButton(quitRect(), "QUIT", true, false,
                    CheckCollisionPointRec(uiMouse, quitRect()));
 
-        DrawText("F11 fullscreen  |  WASD / arrows turn  |  SPACE boost  |  R restart  |  ESC quit",
+        DrawText("F11 fullscreen  |  WASD / arrows turn  |  SPACE boost  |  R restart  |  ESC menu",
                  16, kBarY + 66, 12, GRAY);
 
         if (over) {
@@ -824,7 +929,7 @@ struct Game {
             DrawText(highText.c_str(), (kArenaW - MeasureText(highText.c_str(), 24)) / 2,
                      kHud + 256, 24, kText);
 
-            const char* prompt = "Press R to restart, ESC to quit";
+            const char* prompt = "Press R to restart, ESC for menu";
             DrawText(prompt, (kArenaW - MeasureText(prompt, 20)) / 2, kHud + 320, 20, LIGHTGRAY);
         }
     }
@@ -834,6 +939,7 @@ struct Game {
 
 int main() {
     InitWindow(kWinW, kWinH, "Snake");
+    SetExitKey(KEY_NULL);  // ESC is handled by the game (menu/quit), not the window
     SetTargetFPS(60);
 
     // Fixed-size virtual canvas, letterboxed to the real window (fullscreen too).
@@ -844,7 +950,7 @@ int main() {
     while (!game.quit && !WindowShouldClose()) {
         const float dt = GetFrameTime();
 
-        if (IsKeyPressed(KEY_F11)) {
+        if (IsKeyPressed(KEY_F11) || game.takeFullscreenRequest()) {
             ToggleFullscreen();
         }
 

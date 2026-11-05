@@ -40,6 +40,8 @@ constexpr float kObstaclePeriod = 8.0f;
 constexpr float kWarningTime = 1.0f;
 constexpr float kGhostLife = 0.32f;  // seconds a wrap ghost stays visible
 constexpr int kMaxObstacles = 15;
+constexpr float kObstacleLife = 12.0f;  // solid obstacles expire after this long
+constexpr float kObstacleFade = 1.5f;   // fade-out window before they vanish
 constexpr int kMinLength = 3;
 
 // Special-food effects (beneficial or harmful, picked at random)
@@ -108,6 +110,12 @@ struct Warning {
     float timer = kWarningTime;
 };
 
+// Solid obstacle with a finite lifetime so the arena keeps changing.
+struct Obstacle {
+    Cell cell;
+    float life = 0.0f;
+};
+
 // Fading echo of the head at both ends of a wrap teleport.
 struct GhostHead {
     Cell cell;
@@ -148,7 +156,7 @@ Rectangle menuQuitRect() { return Rectangle{220.0f, 466.0f, 280.0f, 56.0f}; }
 
 struct Game {
     std::deque<Cell> snake;      // front == head
-    std::deque<Cell> obstacles;  // solid obstacles, front == oldest
+    std::deque<Obstacle> obstacles;  // solid obstacles, front == oldest
     std::vector<Warning> warnings;
     std::vector<GhostHead> ghosts;
     bool hasSpecial = false;
@@ -242,8 +250,8 @@ struct Game {
     }
 
     bool isSolid(const Cell& c) const {
-        for (const Cell& o : obstacles) {
-            if (o == c) {
+        for (const Obstacle& o : obstacles) {
+            if (o.cell == c) {
                 return true;
             }
         }
@@ -338,9 +346,9 @@ struct Game {
         }
         std::uniform_int_distribution<size_t> pick(0, candidates.size() - 1);
         if (static_cast<int>(obstacles.size()) >= kMaxObstacles) {
-            obstacles.pop_front();
+            obstacles.pop_front();  // drop the oldest at the cap
         }
-        obstacles.push_back(candidates[pick(rng)]);
+        obstacles.push_back(Obstacle{candidates[pick(rng)], kObstacleLife});
     }
 
     void applyEffect(Effect e) {
@@ -436,6 +444,16 @@ struct Game {
             obstacleTimer -= kObstaclePeriod;
             spawnWave();
         }
+        // Existing solids age out; the last moments fade instead of popping.
+        for (size_t i = 0; i < obstacles.size();) {
+            obstacles[i].life -= dt;
+            if (obstacles[i].life <= 0.0f) {
+                obstacles.erase(obstacles.begin() + static_cast<std::ptrdiff_t>(i));
+            } else {
+                ++i;
+            }
+        }
+
         for (size_t i = 0; i < warnings.size();) {
             warnings[i].timer -= dt;
             if (warnings[i].timer <= 0.0f) {
@@ -444,7 +462,7 @@ struct Game {
                 if (static_cast<int>(obstacles.size()) >= kMaxObstacles) {
                     obstacles.pop_front();  // drop the oldest solid obstacle
                 }
-                obstacles.push_back(c);
+                obstacles.push_back(Obstacle{c, kObstacleLife});
             } else {
                 ++i;
             }
@@ -842,8 +860,13 @@ struct Game {
             DrawCircleLines(sx, sy, 9.5f + 1.5f * pulse, kSpecialHalo);
         }
 
-        for (const Cell& o : obstacles) {
-            DrawRectangleRounded(cellRect(o, 2.0f), 0.18f, 6, kObstacle);
+        for (const Obstacle& o : obstacles) {
+            Color color = kObstacle;
+            if (o.life < kObstacleFade) {
+                const float fade = std::max(0.0f, o.life / kObstacleFade);
+                color.a = static_cast<unsigned char>(255.0f * fade);
+            }
+            DrawRectangleRounded(cellRect(o.cell, 2.0f), 0.18f, 6, color);
         }
 
         // Warning phase: flashing, not yet deadly.

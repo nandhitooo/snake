@@ -8,7 +8,7 @@ Game Snake untuk desktop dengan tampilan grafis penuh memakai [raylib](https://w
 - Arena 30×20 sel (720×480 px) + HUD + bar kontrol GUI.
 - Tembus tepi arena (wrap-around) dengan efek ghost saat pindah sisi.
 - Boost tahan SPACE: tick lebih cepat, tetapi ekor memendek tiap 3 tick boost.
-- Obstacle muncul berkala dengan peringatan berkedip sebelum aktif.
+- Obstacle muncul berkala dengan peringatan berkedip sebelum aktif, lalu hilang setelah beberapa saat.
 - **Special food** dengan 7 efek acak yang menguntungkan atau merugikan.
 - Mode fullscreen (F11 atau tombol menu) dengan letterbox scaling, tetap tajam di resolusi apa pun.
 - Kontrol GUI: tombol arah, boost, restart, dan quit bisa diklik.
@@ -77,6 +77,7 @@ Balik arah 180° diabaikan, dan hanya satu belokan yang dibuffer per tick.
 - Tepi arena tidak mematikan: kepala muncul kembali di sisi seberang.
 - Boost memakai interval tick 0.08 s (normal 0.16 s) dan memotong 1 segmen ekor setiap 3 tick boost, dengan panjang minimum 3.
 - Gelombang obstacle muncul tiap 8 detik berisi 1–3 sel, berkedip sebagai peringatan selama 1 detik, maksimal 15 obstacle (yang tertua dihapus), dan tidak pernah muncul di badan, food, atau dalam radius 4 sel dari kepala.
+- Setiap obstacle solid bertahan 12 detik, memudar pada 1,5 detik terakhir, lalu hilang otomatis. Efek `CLEANSE` tetap bisa menghapus semuanya sekaligus.
 
 ## Special Food
 

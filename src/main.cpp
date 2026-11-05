@@ -9,12 +9,10 @@
 //   src/ui/draw.cpp src/render/renderer.cpp -o build/snake_gui.exe $(pkg-config
 //   --cflags --libs raylib)
 //
-// 30x20 grid, 24 px cells, 60 px HUD above the 720x480 arena, plus an 80 px
-// GUI control bar. The game opens on a home menu; F11 or the menu button
-// toggles fullscreen and the 720x620 canvas is letterboxed. While playing, ESC
-// returns to the menu. Controls: WASD/arrows turn, hold SPACE for boost, R
-// restarts after game over. The bottom bar also exposes clickable buttons for
-// every action.
+// 16:9 canvas (960x540), with a 30x20 grid and centered 600x400 arena.
+// F11 or the menu button toggles fullscreen. While playing, ESC returns to the
+// menu. Controls: WASD/arrows turn, hold SPACE for boost, R restarts after
+// game over. The bottom bar exposes clickable controls.
 
 #include "game/game.hpp"
 

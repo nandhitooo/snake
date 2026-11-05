@@ -40,22 +40,23 @@ void Game::drawMenu() const {
     const int titleSize = 88;
     const int titleW = MeasureText(title, titleSize);
     const int titleX = (kWinW - titleW) / 2;
-    DrawText(title, titleX + 4, 124, titleSize, Color{28, 76, 58, 255});
-    DrawText(title, titleX, 120, titleSize, kSnakeHead);
+    DrawText(title, titleX + 4, 58, titleSize, Color{28, 76, 58, 255});
+    DrawText(title, titleX, 54, titleSize, kSnakeHead);
 
     const char* subtitle = "raylib edition";
-    DrawText(subtitle, (kWinW - MeasureText(subtitle, 20)) / 2, 216, 20, GRAY);
+    DrawText(subtitle, (kWinW - MeasureText(subtitle, 20)) / 2, 150, 20, GRAY);
 
     // Small snake-and-food motif under the title.
+    constexpr float motifX = (kWinW - 250.0f) / 2.0f;
     for (int i = 0; i < 7; ++i) {
         const float t = static_cast<float>(i) / 6.0f;
-        DrawRectangleRounded(Rectangle{248.0f + static_cast<float>(i * 30), 262.0f, 22.0f, 22.0f},
+        DrawRectangleRounded(Rectangle{motifX + static_cast<float>(i * 30), 196.0f, 22.0f, 22.0f},
                              0.35f, 8, render::lerpColor(kSnakeTail, kSnakeHead, t));
     }
-    const float headX = 248.0f + 6.0f * 30.0f;
-    DrawCircle(static_cast<int>(headX) + 15, 268, 2.2f, kEye);
-    DrawCircle(static_cast<int>(headX) + 15, 278, 2.2f, kEye);
-    DrawCircle(248 + 7 * 30 + 12, 273, 7.0f, kFood);
+    const float headX = motifX + 6.0f * 30.0f;
+    DrawCircle(static_cast<int>(headX) + 15, 202, 2.2f, kEye);
+    DrawCircle(static_cast<int>(headX) + 15, 212, 2.2f, kEye);
+    DrawCircle(static_cast<int>(motifX) + 7 * 30 + 12, 207, 7.0f, kFood);
 
     const bool fs = IsWindowFullscreen();
     drawButton(ui::menuPlayRect(), "PLAY", true, false,
@@ -67,10 +68,10 @@ void Game::drawMenu() const {
 
     if (highScore > 0) {
         const std::string best = "Best this session: " + std::to_string(highScore);
-        DrawText(best.c_str(), (kWinW - MeasureText(best.c_str(), 16)) / 2, 548, 16, GRAY);
+        DrawText(best.c_str(), (kWinW - MeasureText(best.c_str(), 16)) / 2, 462, 16, GRAY);
     }
     const char* hint = "ENTER / PLAY to start  |  F11 fullscreen  |  ESC quit";
-    DrawText(hint, (kWinW - MeasureText(hint, 14)) / 2, 586, 14, Color{120, 124, 136, 255});
+    DrawText(hint, (kWinW - MeasureText(hint, 14)) / 2, 500, 14, Color{120, 124, 136, 255});
 }
 
 } // namespace snake

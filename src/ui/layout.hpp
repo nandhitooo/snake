@@ -5,29 +5,34 @@
 namespace snake::ui {
 
 inline Rectangle moveLeftRect() {
-    return Rectangle{16.0f, static_cast<float>(kBarY + 16), 52.0f, 48.0f};
+    return Rectangle{static_cast<float>(kArenaX + 20), static_cast<float>(kBarY + 8), 44.0f, 44.0f};
 }
 inline Rectangle moveUpRect() {
-    return Rectangle{76.0f, static_cast<float>(kBarY + 16), 52.0f, 48.0f};
+    return Rectangle{static_cast<float>(kArenaX + 70), static_cast<float>(kBarY + 8), 44.0f, 44.0f};
 }
 inline Rectangle moveDownRect() {
-    return Rectangle{136.0f, static_cast<float>(kBarY + 16), 52.0f, 48.0f};
+    return Rectangle{static_cast<float>(kArenaX + 120), static_cast<float>(kBarY + 8), 44.0f,
+                     44.0f};
 }
 inline Rectangle moveRightRect() {
-    return Rectangle{196.0f, static_cast<float>(kBarY + 16), 52.0f, 48.0f};
+    return Rectangle{static_cast<float>(kArenaX + 170), static_cast<float>(kBarY + 8), 44.0f,
+                     44.0f};
 }
 inline Rectangle boostRect() {
-    return Rectangle{268.0f, static_cast<float>(kBarY + 16), 120.0f, 48.0f};
+    return Rectangle{static_cast<float>(kArenaX + 222), static_cast<float>(kBarY + 8), 96.0f,
+                     44.0f};
 }
 inline Rectangle restartRect() {
-    return Rectangle{404.0f, static_cast<float>(kBarY + 16), 120.0f, 48.0f};
+    return Rectangle{static_cast<float>(kArenaX + 330), static_cast<float>(kBarY + 8), 108.0f,
+                     44.0f};
 }
 inline Rectangle quitRect() {
-    return Rectangle{540.0f, static_cast<float>(kBarY + 16), 100.0f, 48.0f};
+    return Rectangle{static_cast<float>(kArenaX + 450), static_cast<float>(kBarY + 8), 108.0f,
+                     44.0f};
 }
 
-inline Rectangle menuPlayRect() { return Rectangle{220.0f, 330.0f, 280.0f, 56.0f}; }
-inline Rectangle menuFullscreenRect() { return Rectangle{220.0f, 398.0f, 280.0f, 56.0f}; }
-inline Rectangle menuQuitRect() { return Rectangle{220.0f, 466.0f, 280.0f, 56.0f}; }
+inline Rectangle menuPlayRect() { return Rectangle{340.0f, 254.0f, 280.0f, 56.0f}; }
+inline Rectangle menuFullscreenRect() { return Rectangle{340.0f, 322.0f, 280.0f, 56.0f}; }
+inline Rectangle menuQuitRect() { return Rectangle{340.0f, 390.0f, 280.0f, 56.0f}; }
 
 } // namespace snake::ui

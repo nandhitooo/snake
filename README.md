@@ -5,7 +5,7 @@ Game Snake untuk desktop dengan tampilan grafis penuh memakai [raylib](https://w
 ## Fitur
 
 - Home menu dengan tombol **PLAY**, **FULLSCREEN**, dan **QUIT**.
-- Arena 30×20 sel (720×480 px) + HUD + bar kontrol GUI.
+- UI 16:9 (960×540 px), dengan arena 30×20 sel (600×400 px), HUD, dan bar kontrol.
 - Tembus tepi arena (wrap-around) dengan efek ghost saat pindah sisi.
 - Boost tahan SPACE: tick lebih cepat, tetapi ekor memendek tiap 3 tick boost.
 - Obstacle muncul berkala dengan peringatan berkedip sebelum aktif, lalu hilang setelah beberapa saat.

@@ -6,14 +6,19 @@ namespace snake {
 
 inline constexpr int kCols = 30;
 inline constexpr int kRows = 20;
-inline constexpr int kCell = 24;
-inline constexpr int kHud = 60;
-inline constexpr int kArenaW = kCols * kCell; // 720
-inline constexpr int kArenaH = kRows * kCell; // 480
-inline constexpr int kWinW = kArenaW;         // 720
-inline constexpr int kBarH = 80;              // GUI control bar under the arena
-inline constexpr int kBarY = kHud + kArenaH;  // 540
-inline constexpr int kWinH = kBarY + kBarH;   // 620
+inline constexpr int kCell = 20;
+inline constexpr int kHud = 48;
+inline constexpr int kArenaW = kCols * kCell; // 600
+inline constexpr int kArenaH = kRows * kCell; // 400
+inline constexpr int kWinW = 960;
+inline constexpr int kWinH = 540;
+inline constexpr int kBarH = 76;
+inline constexpr int kArenaX = (kWinW - kArenaW) / 2;
+inline constexpr int kPanelH = kHud + kArenaH + kBarH;
+inline constexpr int kPanelX = kArenaX;
+inline constexpr int kPanelY = (kWinH - kPanelH) / 2;
+inline constexpr int kArenaY = kPanelY + kHud;
+inline constexpr int kBarY = kArenaY + kArenaH;
 
 inline constexpr float kNormalTick = 0.16f; // slightly slower than the original 0.12 s
 inline constexpr float kBoostTick = 0.08f;  // boost still halves the interval

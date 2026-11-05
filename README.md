@@ -39,11 +39,17 @@ g++ -std=c++17 -Wall -Wextra snake_gui.cpp -o snake_gui $(pkg-config --cflags --
 ./snake_gui
 ```
 
-Windows (MSYS2/MinGW) tanpa `pkg-config`:
+Windows (MSYS2/MinGW), setelah `pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-raylib`:
 
 ```bash
-g++ -std=c++17 snake_gui.cpp -o snake_gui.exe -lraylib -lopengl32 -lgdi32 -lwinmm
+g++ -std=c++17 snake_gui.cpp -o snake_gui.exe $(pkg-config --cflags --libs raylib)
 ```
+
+Salin `libraylib.dll` (dan DLL runtime MinGW bila ada) ke folder yang sama dengan `.exe` jika game tidak mau jalan.
+
+### Build `.exe` otomatis (GitHub Actions)
+
+Workflow `.github/workflows/windows.yml` membangun `snake_gui.exe` di runner Windows pada setiap push ke `main`, dan bisa dijalankan manual dari tab **Actions** → **Build Windows EXE** → **Run workflow**. Unduh `snake_gui-windows-x64.zip` di bagian **Artifacts**, ekstrak, lalu jalankan `snake_gui.exe`. Workflow membundel DLL MinGW yang dibutuhkan.
 
 ## Kontrol
 
@@ -86,7 +92,8 @@ Efek bertimer ditampilkan beserta hitungan mundur di baris `FX:` pada HUD.
 
 ```
 .
-├── snake_gui.cpp   # seluruh game (logika, render, UI)
+├── .github/workflows/windows.yml   # build .exe otomatis
+├── snake_gui.cpp                   # seluruh game (logika, render, UI)
 ├── README.md
 └── .gitignore
 ```

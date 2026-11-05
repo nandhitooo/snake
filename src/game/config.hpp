@@ -4,12 +4,12 @@
 
 namespace snake {
 
-inline constexpr int kCols = 30;
-inline constexpr int kRows = 20;
+inline constexpr int kCols = 32;
+inline constexpr int kRows = 18;
 inline constexpr int kCell = 20;
 inline constexpr int kHud = 48;
-inline constexpr int kArenaW = kCols * kCell; // 600
-inline constexpr int kArenaH = kRows * kCell; // 400
+inline constexpr int kArenaW = kCols * kCell; // 640
+inline constexpr int kArenaH = kRows * kCell; // 360
 inline constexpr int kWinW = 960;
 inline constexpr int kWinH = 540;
 inline constexpr int kBarH = 76;

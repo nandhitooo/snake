@@ -5,7 +5,7 @@ Game Snake untuk desktop dengan tampilan grafis penuh memakai [raylib](https://w
 ## Fitur
 
 - Home menu dengan tombol **PLAY**, **FULLSCREEN**, dan **QUIT**.
-- UI 16:9 (960×540 px), dengan arena 30×20 sel (600×400 px), HUD, dan bar kontrol.
+- UI 16:9 (960×540 px), dengan arena 32×18 sel (640×360 px), HUD, dan bar kontrol.
 - Tembus tepi arena (wrap-around) dengan efek ghost saat pindah sisi.
 - Boost tahan SPACE: tick lebih cepat, tetapi ekor memendek tiap 3 tick boost.
 - Obstacle muncul berkala dengan peringatan berkedip sebelum aktif, lalu hilang setelah beberapa saat.
@@ -95,7 +95,7 @@ Muncul dengan peluang 30% setiap kali food normal baru muncul (maksimal satu di 
 | `GROW +3` | Merugikan | Tambah 3 segmen tubuh |
 | `CURSE +3` | Merugikan | Munculkan 3 obstacle solid acak, minimal 4 sel dari kepala |
 
-Efek bertimer ditampilkan beserta hitungan mundur di baris `FX:` pada HUD.
+Efek spesial tampil sebagai alert di arena; efek bertimer juga menampilkan hitungan mundur di baris `FX:` pada HUD.
 
 ## Struktur Proyek
 

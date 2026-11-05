@@ -142,6 +142,19 @@ void Game::draw() const {
         drawGhostHead(g);
     }
 
+    if (fxTextTimer > 0.0f) {
+        const char* alert = TextFormat("SPECIAL: %s", fxText.c_str());
+        constexpr int fontSize = 24;
+        const int textWidth = MeasureText(alert, fontSize);
+        const Rectangle banner{static_cast<float>(kArenaX + (kArenaW - textWidth - 40) / 2),
+                               static_cast<float>(kArenaY + (kArenaH - 58) / 2),
+                               static_cast<float>(textWidth + 40), 58.0f};
+        DrawRectangleRounded(banner, 0.25f, 8, Color{12, 14, 20, 230});
+        DrawRectangleLinesEx(banner, 2.0f, fxColor);
+        DrawText(alert, static_cast<int>(banner.x + (banner.width - textWidth) / 2.0f),
+                 static_cast<int>(banner.y + (banner.height - fontSize) / 2.0f), fontSize, fxColor);
+    }
+
     // Visible arena frame.
     DrawRectangleLinesEx(Rectangle{static_cast<float>(kArenaX), static_cast<float>(kArenaY),
                                    static_cast<float>(kArenaW), static_cast<float>(kArenaH)},

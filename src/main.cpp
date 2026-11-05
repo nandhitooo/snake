@@ -9,7 +9,7 @@
 //   src/ui/draw.cpp src/render/renderer.cpp -o build/snake_gui.exe $(pkg-config
 //   --cflags --libs raylib)
 //
-// 16:9 canvas (960x540), with a 30x20 grid and centered 600x400 arena.
+// 16:9 canvas (960x540), with a 32x18 grid and centered 640x360 arena.
 // F11 or the menu button toggles fullscreen. While playing, ESC returns to the
 // menu. Controls: WASD/arrows turn, hold SPACE for boost, R restarts after
 // game over. The bottom bar exposes clickable controls.

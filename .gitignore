@@ -1,6 +1,7 @@
 # Build output
 snake_gui
 snake
+build/
 dist/
 *.o
 *.obj

@@ -28,7 +28,7 @@ jobs:
       - name: Build snake_gui.exe
         run: |
           mkdir -p dist
-          g++ -std=c++17 -O2 -Wall -Wextra snake_gui.cpp -o dist/snake_gui.exe $(pkg-config --cflags --libs raylib)
+          g++ -std=c++17 -O2 -Wall -Wextra src/snake_gui.cpp -o dist/snake_gui.exe $(pkg-config --cflags --libs raylib)
           # Bundle MinGW runtime/raylib DLLs next to the exe when they are not static.
           ldd dist/snake_gui.exe 2>/dev/null | awk '/mingw64\/bin/ {print $3}' | while read -r dll; do
             cp "$dll" dist/

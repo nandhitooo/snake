@@ -1,6 +1,6 @@
 # Snake (raylib GUI)
 
-Game Snake untuk desktop dengan tampilan grafis penuh memakai [raylib](https://www.raylib.com/). Seluruh game berada dalam satu file C++17 (`snake_gui.cpp`) tanpa aset eksternal: tidak ada gambar, font, atau suara.
+Game Snake untuk desktop dengan tampilan grafis penuh memakai [raylib](https://www.raylib.com/). Seluruh game berada dalam satu file C++17 (`src/snake_gui.cpp`) tanpa aset eksternal: tidak ada gambar, font, atau suara.
 
 ## Fitur
 
@@ -36,17 +36,19 @@ brew install raylib
 ## Build & Jalankan
 
 ```bash
-g++ -std=c++17 -Wall -Wextra snake_gui.cpp -o snake_gui $(pkg-config --cflags --libs raylib)
-./snake_gui
+mkdir -p build
+g++ -std=c++17 -Wall -Wextra src/snake_gui.cpp -o build/snake_gui $(pkg-config --cflags --libs raylib)
+./build/snake_gui
 ```
 
 Windows (MSYS2/MinGW), setelah `pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-raylib`:
 
 ```bash
-g++ -std=c++17 snake_gui.cpp -o snake_gui.exe $(pkg-config --cflags --libs raylib)
+mkdir -p build
+g++ -std=c++17 src/snake_gui.cpp -o build/snake_gui.exe $(pkg-config --cflags --libs raylib)
 ```
 
-Salin `libraylib.dll` (dan DLL runtime MinGW bila ada) ke folder yang sama dengan `.exe` jika game tidak mau jalan.
+Salin `libraylib.dll` (dan DLL runtime MinGW bila ada) ke `build/` jika game tidak mau jalan.
 
 ### Build `.exe` otomatis (GitHub Actions)
 
@@ -100,10 +102,12 @@ Efek bertimer ditampilkan beserta hitungan mundur di baris `FX:` pada HUD.
 ```
 .
 ├── .github/workflows/windows.yml   # build .exe otomatis
-├── snake_gui.cpp                   # seluruh game (logika, render, UI)
+├── src/snake_gui.cpp               # seluruh game (logika, render, UI)
 ├── README.md
 └── .gitignore
 ```
+
+Hasil build lokal masuk `build/`; artifact GitHub Actions masuk `dist/`. Keduanya diabaikan Git.
 
 ## Lisensi
 

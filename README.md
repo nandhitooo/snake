@@ -1,6 +1,6 @@
 # Snake (raylib GUI)
 
-Game Snake untuk desktop dengan tampilan grafis penuh memakai [raylib](https://www.raylib.com/). Seluruh game berada dalam satu file C++17 (`src/snake_gui.cpp`) tanpa aset eksternal: tidak ada gambar, font, atau suara.
+Game Snake untuk desktop dengan tampilan grafis penuh memakai [raylib](https://www.raylib.com/). Kode C++17 dipisah menurut peran, tanpa aset eksternal: tidak ada gambar, font, atau suara.
 
 ## Fitur
 
@@ -37,7 +37,7 @@ brew install raylib
 
 ```bash
 mkdir -p build
-g++ -std=c++17 -Wall -Wextra src/snake_gui.cpp -o build/snake_gui $(pkg-config --cflags --libs raylib)
+g++ -std=c++17 -Wall -Wextra -Isrc src/main.cpp src/game/game.cpp src/ui/input.cpp src/ui/draw.cpp src/render/renderer.cpp -o build/snake_gui $(pkg-config --cflags --libs raylib)
 ./build/snake_gui
 ```
 
@@ -45,7 +45,7 @@ Windows (MSYS2/MinGW), setelah `pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-
 
 ```bash
 mkdir -p build
-g++ -std=c++17 src/snake_gui.cpp -o build/snake_gui.exe $(pkg-config --cflags --libs raylib)
+g++ -std=c++17 -Isrc src/main.cpp src/game/game.cpp src/ui/input.cpp src/ui/draw.cpp src/render/renderer.cpp -o build/snake_gui.exe $(pkg-config --cflags --libs raylib)
 ```
 
 Salin `libraylib.dll` (dan DLL runtime MinGW bila ada) ke `build/` jika game tidak mau jalan.
@@ -102,7 +102,19 @@ Efek bertimer ditampilkan beserta hitungan mundur di baris `FX:` pada HUD.
 ```
 .
 ├── .github/workflows/windows.yml   # build .exe otomatis
-├── src/snake_gui.cpp               # seluruh game (logika, render, UI)
+├── src/
+│   ├── game/
+│   │   ├── config.hpp               # ukuran arena, aturan, dan warna
+│   │   ├── game.hpp                 # state dan antarmuka game
+│   │   └── game.cpp                 # aturan dan simulasi game
+│   ├── render/
+│   │   ├── color.hpp                # helper warna untuk renderer dan UI
+│   │   └── renderer.cpp             # gambar arena, HUD, dan overlay
+│   ├── ui/
+│   │   ├── draw.cpp                 # menu dan tombol
+│   │   ├── input.cpp                # input keyboard dan mouse
+│   │   └── layout.hpp               # posisi tombol UI
+│   └── main.cpp                     # window dan game loop
 ├── README.md
 └── .gitignore
 ```

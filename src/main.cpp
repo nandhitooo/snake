@@ -1,0 +1,76 @@
+// Snake game entry point (C++17, raylib).
+//
+// Build (Linux/macOS):
+//   g++ -std=c++17 -Wall -Wextra -Isrc src/main.cpp src/game/game.cpp
+//   src/ui/input.cpp src/ui/draw.cpp src/render/renderer.cpp -o build/snake_gui
+//   $(pkg-config --cflags --libs raylib)
+// Build (Windows/MinGW):
+//   g++ -std=c++17 -Isrc src/main.cpp src/game/game.cpp src/ui/input.cpp
+//   src/ui/draw.cpp src/render/renderer.cpp -o build/snake_gui.exe $(pkg-config
+//   --cflags --libs raylib)
+//
+// 30x20 grid, 24 px cells, 60 px HUD above the 720x480 arena, plus an 80 px
+// GUI control bar. The game opens on a home menu; F11 or the menu button
+// toggles fullscreen and the 720x620 canvas is letterboxed. While playing, ESC
+// returns to the menu. Controls: WASD/arrows turn, hold SPACE for boost, R
+// restarts after game over. The bottom bar also exposes clickable buttons for
+// every action.
+
+#include "game/game.hpp"
+
+#include <algorithm>
+
+using namespace snake;
+
+int main() {
+    InitWindow(kWinW, kWinH, "Snake");
+    SetExitKey(KEY_NULL); // ESC is handled by the game (menu/quit), not the window
+    SetTargetFPS(60);
+
+    // Fixed-size virtual canvas, letterboxed to the real window (fullscreen too).
+    RenderTexture2D canvas = LoadRenderTexture(kWinW, kWinH);
+    SetTextureFilter(canvas.texture, TEXTURE_FILTER_BILINEAR);
+
+    Game game;
+    while (!game.quit && !WindowShouldClose()) {
+        const float dt = GetFrameTime();
+
+        if (IsKeyPressed(KEY_F11) || game.takeFullscreenRequest()) {
+            ToggleFullscreen();
+        }
+
+        const float screenW = static_cast<float>(GetScreenWidth());
+        const float screenH = static_cast<float>(GetScreenHeight());
+        float scale =
+            std::min(screenW / static_cast<float>(kWinW), screenH / static_cast<float>(kWinH));
+        if (scale <= 0.0f) {
+            scale = 1.0f;
+        }
+        const Vector2 offset{(screenW - static_cast<float>(kWinW) * scale) * 0.5f,
+                             (screenH - static_cast<float>(kWinH) * scale) * 0.5f};
+        const Vector2 mouse = GetMousePosition();
+        const Vector2 virtualMouse{(mouse.x - offset.x) / scale, (mouse.y - offset.y) / scale};
+
+        game.handleUi(virtualMouse, IsMouseButtonDown(MOUSE_BUTTON_LEFT),
+                      IsMouseButtonPressed(MOUSE_BUTTON_LEFT));
+        game.handleInput();
+        game.stepFrame(dt);
+
+        BeginTextureMode(canvas);
+        game.draw();
+        EndTextureMode();
+
+        BeginDrawing();
+        ClearBackground(BLACK);
+        DrawTexturePro(canvas.texture,
+                       Rectangle{0.0f, 0.0f, static_cast<float>(kWinW), -static_cast<float>(kWinH)},
+                       Rectangle{offset.x, offset.y, static_cast<float>(kWinW) * scale,
+                                 static_cast<float>(kWinH) * scale},
+                       Vector2{0.0f, 0.0f}, 0.0f, WHITE);
+        EndDrawing();
+    }
+
+    UnloadRenderTexture(canvas);
+    CloseWindow();
+    return 0;
+}

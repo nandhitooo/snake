@@ -46,6 +46,7 @@ void Game::reset() {
     buffered = Dir::Right;
     hasBuffered = false;
     boostHeld = false;
+    paused = false;
     boostTicks = 0;
     obstacles.clear();
     warnings.clear();
@@ -82,7 +83,7 @@ bool Game::takeFullscreenRequest() {
 }
 
 bool Game::boostActive() const {
-    return !over && boostHeld && snake.size() > static_cast<size_t>(kMinLength);
+    return !over && !paused && boostHeld && snake.size() > static_cast<size_t>(kMinLength);
 }
 
 float Game::tickInterval() const {
@@ -490,8 +491,39 @@ void Game::triggerShake(float duration, float intensity) {
     shakeIntensity = intensity;
 }
 
+void Game::togglePause() {
+    if (mode != Mode::Playing || over) {
+        return;
+    }
+    paused = !paused;
+    if (paused) {
+        boostHeld = false;
+        uiBoostHeld = false;
+    }
+}
+
 void Game::updateVfx(float dt) {
     animTime += dt;
+
+    for (Particle& p : ambientParticles) {
+        p.pos.x += p.vel.x * dt;
+        p.pos.y += p.vel.y * dt;
+        if (p.pos.y < -10.0f) {
+            p.pos.y = static_cast<float>(kWinH) + 10.0f;
+            std::uniform_real_distribution<float> distX(0.0f, static_cast<float>(kWinW));
+            p.pos.x = distX(rng);
+        }
+        if (p.pos.x < -10.0f) {
+            p.pos.x = static_cast<float>(kWinW) + 10.0f;
+        } else if (p.pos.x > static_cast<float>(kWinW) + 10.0f) {
+            p.pos.x = -10.0f;
+        }
+    }
+
+    if (paused) {
+        return; // freeze in-game particles and floating texts during pause
+    }
+
     if (shakeTimer > 0.0f) {
         shakeTimer -= dt;
         if (shakeTimer <= 0.0f) {
@@ -512,21 +544,6 @@ void Game::updateVfx(float dt) {
         }
     }
 
-    for (Particle& p : ambientParticles) {
-        p.pos.x += p.vel.x * dt;
-        p.pos.y += p.vel.y * dt;
-        if (p.pos.y < -10.0f) {
-            p.pos.y = static_cast<float>(kWinH) + 10.0f;
-            std::uniform_real_distribution<float> distX(0.0f, static_cast<float>(kWinW));
-            p.pos.x = distX(rng);
-        }
-        if (p.pos.x < -10.0f) {
-            p.pos.x = static_cast<float>(kWinW) + 10.0f;
-        } else if (p.pos.x > static_cast<float>(kWinW) + 10.0f) {
-            p.pos.x = -10.0f;
-        }
-    }
-
     for (size_t i = 0; i < floatingTexts.size();) {
         floatingTexts[i].pos.y -= 24.0f * dt;
         floatingTexts[i].life -= dt;
@@ -542,7 +559,7 @@ void Game::updateVfx(float dt) {
 void Game::stepFrame(float dt) {
     updateVfx(dt);
 
-    if (mode == Mode::Menu) {
+    if (mode == Mode::Menu || paused) {
         return;
     }
     // Ghost heads keep fading even while the game-over overlay is shown.
@@ -600,6 +617,7 @@ void Game::stepFrame(float dt) {
 void Game::gameOver() {
     over = true;
     boostHeld = false;
+    paused = false;
     boostTicks = 0;
     if (score > highScore) {
         if (highScore > 0) {

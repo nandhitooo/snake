@@ -12,6 +12,7 @@ void Game::handleInput() {
                 highScore = score;
             }
             mode = Mode::Menu;
+            paused = false;
             boostHeld = false;
             uiBoostHeld = false;
         }
@@ -25,9 +26,19 @@ void Game::handleInput() {
     }
     if (over) {
         boostHeld = false;
+        paused = false;
         if (IsKeyPressed(KEY_R)) {
             reset();
         }
+        return;
+    }
+
+    if (IsKeyPressed(KEY_P)) {
+        togglePause();
+        return;
+    }
+
+    if (paused) {
         return;
     }
 
@@ -77,16 +88,30 @@ void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
             reset();
         }
     } else {
-        uiBoostHeld = down && CheckCollisionPointRec(mouse, ui::boostRect());
-        if (pressed) {
-            if (CheckCollisionPointRec(mouse, ui::moveLeftRect())) {
-                queueTurn(Dir::Left);
-            } else if (CheckCollisionPointRec(mouse, ui::moveUpRect())) {
-                queueTurn(Dir::Up);
-            } else if (CheckCollisionPointRec(mouse, ui::moveDownRect())) {
-                queueTurn(Dir::Down);
-            } else if (CheckCollisionPointRec(mouse, ui::moveRightRect())) {
-                queueTurn(Dir::Right);
+        if (pressed && CheckCollisionPointRec(mouse, ui::pauseRect())) {
+            togglePause();
+        }
+        if (paused) {
+            // Clicking inside the arena pause overlay also resumes the game
+            if (pressed &&
+                CheckCollisionPointRec(mouse, Rectangle{static_cast<float>(kArenaX),
+                                                        static_cast<float>(kArenaY),
+                                                        static_cast<float>(kArenaW),
+                                                        static_cast<float>(kArenaH)})) {
+                togglePause();
+            }
+        } else {
+            uiBoostHeld = down && CheckCollisionPointRec(mouse, ui::boostRect());
+            if (pressed) {
+                if (CheckCollisionPointRec(mouse, ui::moveLeftRect())) {
+                    queueTurn(Dir::Left);
+                } else if (CheckCollisionPointRec(mouse, ui::moveUpRect())) {
+                    queueTurn(Dir::Up);
+                } else if (CheckCollisionPointRec(mouse, ui::moveDownRect())) {
+                    queueTurn(Dir::Down);
+                } else if (CheckCollisionPointRec(mouse, ui::moveRightRect())) {
+                    queueTurn(Dir::Right);
+                }
             }
         }
     }

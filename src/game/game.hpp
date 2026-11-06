@@ -90,6 +90,7 @@ struct Game {
     Dir buffered = Dir::Right;
     bool hasBuffered = false; // at most one turn queued per tick
     bool boostHeld = false;
+    bool paused = false;
     bool over = false;
     bool quit = false;
     Mode mode = Mode::Menu;
@@ -126,6 +127,7 @@ struct Game {
     void update();
     void stepFrame(float dt);
     void gameOver();
+    void togglePause();
     void spawnParticles(Vector2 pos, Color color, int count, float speed = 70.0f,
                         float size = 3.5f, float life = 0.5f);
     void addFloatingText(const std::string& text, Vector2 pos, Color color, float duration = 1.0f);

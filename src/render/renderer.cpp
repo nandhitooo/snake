@@ -478,6 +478,48 @@ void Game::draw() const {
     }
 
     // ==========================================
+    // PAUSE OVERLAY (IN-ARENA)
+    // ==========================================
+    if (paused && !over) {
+        DrawRectangle(kArenaX, kArenaY, kArenaW, kArenaH, Color{10, 12, 18, 175});
+
+        const Rectangle pCard{static_cast<float>(kArenaX + (kArenaW - 320) / 2),
+                              static_cast<float>(kArenaY + (kArenaH - 170) / 2), 320.0f, 170.0f};
+
+        DrawRectangleRounded(
+            Rectangle{pCard.x - 3.0f, pCard.y - 3.0f, pCard.width + 6.0f, pCard.height + 6.0f},
+            0.16f, 8, Color{0, 0, 0, 95});
+        DrawRectangleRounded(pCard, 0.16f, 8, Color{22, 26, 38, 248});
+        DrawRectangleRoundedLinesEx(pCard, 0.16f, 8, 2.0f, kCyan);
+
+        // Pause icon ||
+        const float iconX = pCard.x + pCard.width * 0.5f;
+        const float iconY = pCard.y + 36.0f;
+        DrawRectangleRounded(Rectangle{iconX - 11.0f, iconY - 14.0f, 7.0f, 22.0f}, 0.3f, 4,
+                             kCyan);
+        DrawRectangleRounded(Rectangle{iconX + 4.0f, iconY - 14.0f, 7.0f, 22.0f}, 0.3f, 4,
+                             kCyan);
+
+        const char* pTitle = "GAME PAUSED";
+        constexpr int ptSize = 24;
+        const int ptw = MeasureText(pTitle, ptSize);
+        DrawText(pTitle, static_cast<int>(pCard.x + (pCard.width - ptw) * 0.5f),
+                 static_cast<int>(pCard.y + 60), ptSize, kText);
+
+        const char* prompt1 = "Press P or click RESUME to continue";
+        constexpr int pr1Size = 13;
+        const int pr1w = MeasureText(prompt1, pr1Size);
+        DrawText(prompt1, static_cast<int>(pCard.x + (pCard.width - pr1w) * 0.5f),
+                 static_cast<int>(pCard.y + 102), pr1Size, Color{170, 180, 205, 255});
+
+        const char* prompt2 = "ESC for Main Menu";
+        constexpr int pr2Size = 12;
+        const int pr2w = MeasureText(prompt2, pr2Size);
+        DrawText(prompt2, static_cast<int>(pCard.x + (pCard.width - pr2w) * 0.5f),
+                 static_cast<int>(pCard.y + 128), pr2Size, Color{125, 135, 155, 255});
+    }
+
+    // ==========================================
     // TOP HUD BAR
     // ==========================================
     DrawRectangle(kPanelX, kPanelY, kArenaW, kHud, Color{20, 23, 33, 255});
@@ -503,7 +545,12 @@ void Game::draw() const {
     {
         const Rectangle bBadge{static_cast<float>(kPanelX + 355), static_cast<float>(kPanelY + 10),
                                95.0f, 28.0f};
-        if (boostActive()) {
+        if (paused) {
+            DrawRectangleRounded(bBadge, 0.35f, 6, Color{36, 44, 60, 255});
+            DrawRectangleRoundedLinesEx(bBadge, 0.35f, 6, 1.2f, kCyan);
+            DrawText("PAUSED", static_cast<int>(bBadge.x + 22), static_cast<int>(bBadge.y + 7), 12,
+                     kCyan);
+        } else if (boostActive()) {
             DrawRectangleRounded(bBadge, 0.35f, 6, Color{35, 95, 62, 255});
             DrawRectangleRoundedLinesEx(bBadge, 0.35f, 6, 1.5f, kBoostOn);
             DrawText("BOOSTING", static_cast<int>(bBadge.x + 14), static_cast<int>(bBadge.y + 7),
@@ -561,16 +608,18 @@ void Game::draw() const {
     DrawLine(kPanelX, kBarY, kPanelX + kArenaW, kBarY, Color{52, 60, 82, 255});
 
     const bool canPlay = !over;
-    drawButton(ui::moveLeftRect(), "<", canPlay, false,
+    drawButton(ui::moveLeftRect(), "<", canPlay && !paused, false,
                CheckCollisionPointRec(uiMouse, ui::moveLeftRect()));
-    drawButton(ui::moveUpRect(), "^", canPlay, false,
+    drawButton(ui::moveUpRect(), "^", canPlay && !paused, false,
                CheckCollisionPointRec(uiMouse, ui::moveUpRect()));
-    drawButton(ui::moveDownRect(), "v", canPlay, false,
+    drawButton(ui::moveDownRect(), "v", canPlay && !paused, false,
                CheckCollisionPointRec(uiMouse, ui::moveDownRect()));
-    drawButton(ui::moveRightRect(), ">", canPlay, false,
+    drawButton(ui::moveRightRect(), ">", canPlay && !paused, false,
                CheckCollisionPointRec(uiMouse, ui::moveRightRect()));
-    drawButton(ui::boostRect(), "BOOST", canPlay, boostActive(),
+    drawButton(ui::boostRect(), "BOOST", canPlay && !paused, boostActive(),
                CheckCollisionPointRec(uiMouse, ui::boostRect()));
+    drawButton(ui::pauseRect(), paused ? "RESUME" : "PAUSE", canPlay, paused,
+               CheckCollisionPointRec(uiMouse, ui::pauseRect()));
     drawButton(ui::restartRect(), "RESTART", over, false,
                CheckCollisionPointRec(uiMouse, ui::restartRect()));
     drawButton(ui::quitRect(), "QUIT", true, false,
@@ -579,11 +628,12 @@ void Game::draw() const {
     // Keycap shortcut legend
     {
         const float ky = static_cast<float>(kBarY + 56);
-        drawKeycap(kPanelX + 16, ky, "WASD", "Turn");
-        drawKeycap(kPanelX + 130, ky, "SPACE", "Boost");
-        drawKeycap(kPanelX + 252, ky, "R", "Restart");
-        drawKeycap(kPanelX + 360, ky, "ESC", "Menu");
-        drawKeycap(kPanelX + 472, ky, "F11", "Fullscreen");
+        drawKeycap(kPanelX + 14, ky, "WASD", "Turn");
+        drawKeycap(kPanelX + 116, ky, "SPACE", "Boost");
+        drawKeycap(kPanelX + 230, ky, "P", "Pause");
+        drawKeycap(kPanelX + 318, ky, "R", "Restart");
+        drawKeycap(kPanelX + 414, ky, "ESC", "Menu");
+        drawKeycap(kPanelX + 508, ky, "F11", "Fullscreen");
     }
 
     // ==========================================

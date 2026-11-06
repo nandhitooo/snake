@@ -64,6 +64,7 @@ Game dibuka di home menu. **PLAY** / `ENTER` memulai ronde baru, **FULLSCREEN** 
 |---|---|---|
 | Belok | `WASD` / panah | Tombol `<` `^` `v` `>` |
 | Boost | tahan `SPACE` | tahan tombol `BOOST` |
+| Pause / Lanjut | `P` | tombol `PAUSE` / `RESUME` |
 | Restart | `R` (saat game over) | tombol `RESTART` |
 | Fullscreen | `F11` | tombol `FULLSCREEN` di menu |
 | Kembali ke menu | `ESC` saat bermain | — |

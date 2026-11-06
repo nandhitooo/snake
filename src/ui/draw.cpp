@@ -76,42 +76,67 @@ void Game::drawButton(const Rectangle& r, const char* label, bool enabled, bool 
 
     if (std::strcmp(label, "BOOST") == 0) {
         // Lightning bolt icon
-        const float ix = r.x + 18.0f;
+        const float ix = r.x + 15.0f;
         const float iy = cy;
         DrawTriangle(Vector2{ix + 2.0f, iy - 8.0f}, Vector2{ix - 4.0f, iy + 0.5f},
                      Vector2{ix + 1.5f, iy + 0.5f}, iconColor);
         DrawTriangle(Vector2{ix - 1.5f, iy - 0.5f}, Vector2{ix + 4.0f, iy - 0.5f},
                      Vector2{ix - 2.0f, iy + 8.0f}, iconColor);
 
-        constexpr int fSize = 16;
-        DrawText(label, static_cast<int>(r.x + 36.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
+        constexpr int fSize = 15;
+        DrawText(label, static_cast<int>(r.x + 28.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
+                 textColor);
+        return;
+    }
+
+    if (std::strcmp(label, "PAUSE") == 0) {
+        // Pause icon (two vertical bars)
+        const float ix = r.x + 16.0f;
+        const float iy = cy;
+        DrawRectangleRounded(Rectangle{ix - 4.5f, iy - 6.5f, 3.2f, 13.0f}, 0.25f, 2, iconColor);
+        DrawRectangleRounded(Rectangle{ix + 1.5f, iy - 6.5f, 3.2f, 13.0f}, 0.25f, 2, iconColor);
+
+        constexpr int fSize = 14;
+        DrawText(label, static_cast<int>(r.x + 27.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
+                 textColor);
+        return;
+    }
+
+    if (std::strcmp(label, "RESUME") == 0) {
+        // Resume play icon
+        const float ix = r.x + 14.0f;
+        DrawTriangle(Vector2{ix + 8.0f, cy}, Vector2{ix, cy - 6.0f}, Vector2{ix, cy + 6.0f},
+                     iconColor);
+
+        constexpr int fSize = 13;
+        DrawText(label, static_cast<int>(r.x + 25.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
                  textColor);
         return;
     }
 
     if (std::strcmp(label, "RESTART") == 0) {
         // Circular reload arrow
-        const float ix = r.x + 18.0f;
+        const float ix = r.x + 16.0f;
         const float iy = cy;
         DrawRing(Vector2{ix, iy}, 5.0f, 7.2f, 40.0f, 320.0f, 20, iconColor);
         DrawTriangle(Vector2{ix + 4.0f, iy - 7.5f}, Vector2{ix + 7.5f, iy - 3.0f},
                      Vector2{ix + 1.0f, iy - 3.8f}, iconColor);
 
         constexpr int fSize = 15;
-        DrawText(label, static_cast<int>(r.x + 34.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
+        DrawText(label, static_cast<int>(r.x + 30.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
                  textColor);
         return;
     }
 
     if (std::strcmp(label, "QUIT") == 0 && r.height < 50.0f) {
         // Mini power / exit icon for in-game bar
-        const float ix = r.x + 24.0f;
+        const float ix = r.x + 22.0f;
         const float iy = cy;
         DrawRing(Vector2{ix, iy + 1.0f}, 4.5f, 6.5f, 45.0f, 315.0f, 18, iconColor);
         DrawLineEx(Vector2{ix, iy - 6.5f}, Vector2{ix, iy}, 2.0f, iconColor);
 
-        constexpr int fSize = 16;
-        DrawText(label, static_cast<int>(r.x + 42.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
+        constexpr int fSize = 15;
+        DrawText(label, static_cast<int>(r.x + 38.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
                  textColor);
         return;
     }

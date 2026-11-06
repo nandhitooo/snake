@@ -41,6 +41,23 @@ struct GhostHead {
     float maxLife = 0.0f;
 };
 
+struct Particle {
+    Vector2 pos{0.0f, 0.0f};
+    Vector2 vel{0.0f, 0.0f};
+    Color color{255, 255, 255, 255};
+    float size = 3.0f;
+    float life = 0.0f;
+    float maxLife = 1.0f;
+};
+
+struct FloatingText {
+    std::string text;
+    Vector2 pos{0.0f, 0.0f};
+    Color color{255, 255, 255, 255};
+    float life = 0.0f;
+    float maxLife = 1.0f;
+};
+
 bool isOpposite(Dir a, Dir b);
 const char* effectName(Effect e);
 
@@ -50,6 +67,13 @@ struct Game {
     std::deque<Obstacle> obstacles; // solid obstacles, front == oldest
     std::vector<Warning> warnings;
     std::vector<GhostHead> ghosts;
+    std::vector<Particle> particles;
+    std::vector<Particle> ambientParticles;
+    std::vector<FloatingText> floatingTexts;
+    float shakeTimer = 0.0f;
+    float shakeIntensity = 0.0f;
+    float animTime = 0.0f;
+    bool isNewHighRecord = false;
     bool hasSpecial = false;
     Cell specialFood{0, 0};
     Effect specialEffect = Effect::Bonus;
@@ -102,6 +126,12 @@ struct Game {
     void update();
     void stepFrame(float dt);
     void gameOver();
+    void spawnParticles(Vector2 pos, Color color, int count, float speed = 70.0f,
+                        float size = 3.5f, float life = 0.5f);
+    void addFloatingText(const std::string& text, Vector2 pos, Color color, float duration = 1.0f);
+    void triggerShake(float duration, float intensity);
+    void initAmbientParticles();
+    void updateVfx(float dt);
     void drawEyes() const;
     void drawGhostHead(const GhostHead& g) const;
     void drawButton(const Rectangle& r, const char* label, bool enabled, bool active,

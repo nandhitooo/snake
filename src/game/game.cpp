@@ -30,7 +30,10 @@ const char* effectName(Effect e) {
     return "?";
 }
 
-Game::Game() { reset(); }
+Game::Game() {
+    initAmbientParticles();
+    reset();
+}
 
 void Game::reset() {
     snake.clear();
@@ -47,6 +50,11 @@ void Game::reset() {
     obstacles.clear();
     warnings.clear();
     ghosts.clear();
+    particles.clear();
+    floatingTexts.clear();
+    shakeTimer = 0.0f;
+    shakeIntensity = 0.0f;
+    isNewHighRecord = false;
     hasSpecial = false;
     speedFactor = 1.0f;
     effectTimer = 0.0f;
@@ -398,18 +406,142 @@ void Game::update() {
     snake.push_front(head);
     if (eats) {
         score += 10;
+        if (highScore > 0 && score > highScore) {
+            isNewHighRecord = true;
+        }
+        const Vector2 fPos{static_cast<float>(kArenaX + food.x * kCell + kCell / 2),
+                           static_cast<float>(kArenaY + food.y * kCell + kCell / 2)};
+        spawnParticles(fPos, kFood, 14, 80.0f, 3.5f, 0.45f);
+        spawnParticles(fPos, Color{255, 230, 160, 255}, 6, 50.0f, 2.5f, 0.35f);
+        addFloatingText("+10", Vector2{fPos.x, fPos.y - 12.0f}, kGood, 0.9f);
         spawnFood();
     } else if (eatsSpecial) {
         score += 10;
+        if (highScore > 0 && score > highScore) {
+            isNewHighRecord = true;
+        }
+        const Vector2 sfPos{static_cast<float>(kArenaX + specialFood.x * kCell + kCell / 2),
+                            static_cast<float>(kArenaY + specialFood.y * kCell + kCell / 2)};
         hasSpecial = false;
         applyEffect(specialEffect);
+        spawnParticles(sfPos, kSpecial, 22, 110.0f, 4.0f, 0.6f);
+        spawnParticles(sfPos, kSpecialHalo, 12, 85.0f, 3.0f, 0.5f);
+        triggerShake(0.18f, 2.8f);
+        addFloatingText(fxText, Vector2{sfPos.x, sfPos.y - 14.0f}, fxColor, 1.3f);
     } else {
         snake.pop_back();
     }
 }
 
+void Game::initAmbientParticles() {
+    ambientParticles.clear();
+    std::uniform_real_distribution<float> distX(0.0f, static_cast<float>(kWinW));
+    std::uniform_real_distribution<float> distY(0.0f, static_cast<float>(kWinH));
+    std::uniform_real_distribution<float> distVy(-16.0f, -6.0f);
+    std::uniform_real_distribution<float> distVx(-6.0f, 6.0f);
+    std::uniform_real_distribution<float> distSz(1.5f, 3.2f);
+    std::uniform_int_distribution<int> distA(25, 65);
+
+    for (int i = 0; i < 35; ++i) {
+        Particle p;
+        p.pos = Vector2{distX(rng), distY(rng)};
+        p.vel = Vector2{distVx(rng), distVy(rng)};
+        const unsigned char a = static_cast<unsigned char>(distA(rng));
+        p.color = Color{90, 140, 200, a};
+        p.size = distSz(rng);
+        p.life = 100.0f;
+        p.maxLife = 100.0f;
+        ambientParticles.push_back(p);
+    }
+}
+
+void Game::spawnParticles(Vector2 pos, Color color, int count, float speed, float size, float life) {
+    std::uniform_real_distribution<float> distAngle(0.0f, 6.2831853f);
+    std::uniform_real_distribution<float> distSpd(speed * 0.35f, speed);
+    std::uniform_real_distribution<float> distSz(size * 0.6f, size * 1.3f);
+    std::uniform_real_distribution<float> distLf(life * 0.6f, life * 1.2f);
+
+    for (int i = 0; i < count; ++i) {
+        const float ang = distAngle(rng);
+        const float spd = distSpd(rng);
+        Particle p;
+        p.pos = pos;
+        p.vel = Vector2{std::cos(ang) * spd, std::sin(ang) * spd};
+        p.color = color;
+        p.size = distSz(rng);
+        p.life = distLf(rng);
+        p.maxLife = p.life;
+        particles.push_back(p);
+    }
+}
+
+void Game::addFloatingText(const std::string& text, Vector2 pos, Color color, float duration) {
+    FloatingText ft;
+    ft.text = text;
+    ft.pos = pos;
+    ft.color = color;
+    ft.life = duration;
+    ft.maxLife = duration;
+    floatingTexts.push_back(ft);
+}
+
+void Game::triggerShake(float duration, float intensity) {
+    shakeTimer = duration;
+    shakeIntensity = intensity;
+}
+
+void Game::updateVfx(float dt) {
+    animTime += dt;
+    if (shakeTimer > 0.0f) {
+        shakeTimer -= dt;
+        if (shakeTimer <= 0.0f) {
+            shakeTimer = 0.0f;
+        }
+    }
+
+    for (size_t i = 0; i < particles.size();) {
+        particles[i].pos.x += particles[i].vel.x * dt;
+        particles[i].pos.y += particles[i].vel.y * dt;
+        particles[i].vel.x *= 0.94f;
+        particles[i].vel.y *= 0.94f;
+        particles[i].life -= dt;
+        if (particles[i].life <= 0.0f) {
+            particles.erase(particles.begin() + static_cast<std::ptrdiff_t>(i));
+        } else {
+            ++i;
+        }
+    }
+
+    for (Particle& p : ambientParticles) {
+        p.pos.x += p.vel.x * dt;
+        p.pos.y += p.vel.y * dt;
+        if (p.pos.y < -10.0f) {
+            p.pos.y = static_cast<float>(kWinH) + 10.0f;
+            std::uniform_real_distribution<float> distX(0.0f, static_cast<float>(kWinW));
+            p.pos.x = distX(rng);
+        }
+        if (p.pos.x < -10.0f) {
+            p.pos.x = static_cast<float>(kWinW) + 10.0f;
+        } else if (p.pos.x > static_cast<float>(kWinW) + 10.0f) {
+            p.pos.x = -10.0f;
+        }
+    }
+
+    for (size_t i = 0; i < floatingTexts.size();) {
+        floatingTexts[i].pos.y -= 24.0f * dt;
+        floatingTexts[i].life -= dt;
+        if (floatingTexts[i].life <= 0.0f) {
+            floatingTexts.erase(floatingTexts.begin() + static_cast<std::ptrdiff_t>(i));
+        } else {
+            ++i;
+        }
+    }
+}
+
 // Frame driver: survival score, obstacle timers, and tick accumulation.
 void Game::stepFrame(float dt) {
+    updateVfx(dt);
+
     if (mode == Mode::Menu) {
         return;
     }
@@ -426,6 +558,14 @@ void Game::stepFrame(float dt) {
     if (over || quit) {
         return;
     }
+
+    if (boostActive() && !snake.empty()) {
+        const Cell& tail = snake.back();
+        const Vector2 tPos{static_cast<float>(kArenaX + tail.x * kCell + kCell / 2),
+                           static_cast<float>(kArenaY + tail.y * kCell + kCell / 2)};
+        spawnParticles(tPos, Color{100, 240, 200, 180}, 1, 30.0f, 2.2f, 0.25f);
+    }
+
     survival += dt;
     const int whole = static_cast<int>(survival);
     if (whole > scoredSeconds) {
@@ -462,7 +602,18 @@ void Game::gameOver() {
     boostHeld = false;
     boostTicks = 0;
     if (score > highScore) {
+        if (highScore > 0) {
+            isNewHighRecord = true;
+        }
         highScore = score;
+    }
+    triggerShake(0.35f, 4.5f);
+    if (!snake.empty()) {
+        const Cell& h = snake.front();
+        const Vector2 hPos{static_cast<float>(kArenaX + h.x * kCell + kCell / 2),
+                           static_cast<float>(kArenaY + h.y * kCell + kCell / 2)};
+        spawnParticles(hPos, Color{255, 75, 75, 255}, 28, 120.0f, 4.0f, 0.7f);
+        spawnParticles(hPos, Color{255, 200, 60, 255}, 16, 90.0f, 3.0f, 0.5f);
     }
 }
 

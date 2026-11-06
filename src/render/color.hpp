@@ -10,7 +10,23 @@ inline Color lerpColor(Color a, Color b, float t) {
         return static_cast<unsigned char>(static_cast<float>(x) +
                                           (static_cast<float>(y) - static_cast<float>(x)) * k);
     };
-    return Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), 255};
+    return Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.a, b.a)};
+}
+
+inline Color withAlpha(Color c, unsigned char a) {
+    return Color{c.r, c.g, c.b, a};
+}
+
+inline Color tint(Color c, float factor) {
+    const auto clampByte = [](float v) {
+        if (v < 0.0f) return 0;
+        if (v > 255.0f) return 255;
+        return static_cast<int>(v);
+    };
+    return Color{static_cast<unsigned char>(clampByte(static_cast<float>(c.r) * factor)),
+                 static_cast<unsigned char>(clampByte(static_cast<float>(c.g) * factor)),
+                 static_cast<unsigned char>(clampByte(static_cast<float>(c.b) * factor)),
+                 c.a};
 }
 
 } // namespace snake::render

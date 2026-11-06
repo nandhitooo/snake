@@ -59,5 +59,11 @@ inline const Color kSpecial{190, 120, 255, 255};
 inline const Color kSpecialHalo{255, 214, 90, 255};
 inline const Color kGood{120, 230, 140, 255};
 inline const Color kBad{240, 110, 90, 255};
+inline const Color kGold{255, 204, 50, 255};
+inline const Color kCyan{80, 205, 240, 255};
+inline const Color kCardBg{22, 25, 36, 240};
+inline const Color kCardBorder{55, 62, 82, 255};
+inline const Color kFoodLeaf{80, 215, 95, 255};
+inline const Color kFoodStem{120, 75, 45, 255};
 
 } // namespace snake

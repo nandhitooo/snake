@@ -7,6 +7,36 @@
 #include <string>
 
 namespace snake {
+namespace {
+
+const char* settingName(int row) {
+    switch (row) {
+    case RowResolution:
+        return "RESOLUTION";
+    case RowFullscreen:
+        return "FULLSCREEN";
+    case RowVSync:
+        return "VSYNC";
+    case RowFps:
+        return "FPS LIMIT";
+    case RowSpeed:
+        return "GAME SPEED";
+    case RowCamera:
+        return "CAMERA";
+    case RowAnimations:
+        return "ANIMATIONS";
+    case RowParticles:
+        return "PARTICLES";
+    case RowShake:
+        return "SCREEN SHAKE";
+    case RowReset:
+        return "RESET TO DEFAULT";
+    default:
+        return "";
+    }
+}
+
+} // namespace
 
 void Game::drawButton(const Rectangle& r, const char* label, bool enabled, bool active,
                       bool hovered) const {
@@ -243,7 +273,7 @@ void Game::drawMenu() const {
     // ==========================================
     {
         constexpr float motifBaseX = (static_cast<float>(kWinW) - 260.0f) * 0.5f;
-        constexpr float motifBaseY = 200.0f;
+        constexpr float motifBaseY = 186.0f;
         constexpr int motifCount = 8;
         constexpr float bodyThick = 18.0f;
 
@@ -332,21 +362,23 @@ void Game::drawMenu() const {
     const bool fs = IsWindowFullscreen();
     drawButton(ui::menuPlayRect(), "PLAY", true, false,
                CheckCollisionPointRec(uiMouse, ui::menuPlayRect()));
+    drawButton(ui::menuSettingsRect(), "SETTINGS", true, false,
+               CheckCollisionPointRec(uiMouse, ui::menuSettingsRect()));
     drawButton(ui::menuFullscreenRect(), fs ? "FULLSCREEN: ON" : "FULLSCREEN: OFF", true, fs,
                CheckCollisionPointRec(uiMouse, ui::menuFullscreenRect()));
     drawButton(ui::menuQuitRect(), "QUIT", true, false,
                CheckCollisionPointRec(uiMouse, ui::menuQuitRect()));
 
-    // Session High Score Card
+    // Session High Score Card (top-right so it never collides with the buttons)
     if (highScore > 0) {
         const std::string best = "★ SESSION BEST: " + std::to_string(highScore) + " ★";
-        constexpr int bestSize = 14;
+        constexpr int bestSize = 13;
         const int bestW = MeasureText(best.c_str(), bestSize);
-        const Rectangle bCard{static_cast<float>(kWinW - bestW - 32) * 0.5f, 458.0f,
-                              static_cast<float>(bestW + 32), 26.0f};
+        const Rectangle bCard{static_cast<float>(kWinW - bestW - 46), 16.0f,
+                              static_cast<float>(bestW + 30), 26.0f};
         DrawRectangleRounded(bCard, 0.4f, 6, Color{32, 28, 16, 230});
         DrawRectangleRoundedLinesEx(bCard, 0.4f, 6, 1.2f, kGold);
-        DrawText(best.c_str(), static_cast<int>(bCard.x + 16), static_cast<int>(bCard.y + 6),
+        DrawText(best.c_str(), static_cast<int>(bCard.x + 15), static_cast<int>(bCard.y + 6),
                  bestSize, kGold);
     }
 
@@ -354,7 +386,69 @@ void Game::drawMenu() const {
     const char* hint = "ENTER / PLAY to start  |  F11 fullscreen  |  ESC quit";
     constexpr int hintSize = 13;
     const int hintW = MeasureText(hint, hintSize);
-    DrawText(hint, (kWinW - hintW) / 2, 498, hintSize, Color{125, 132, 148, 255});
+    DrawText(hint, (kWinW - hintW) / 2, 505, hintSize, Color{125, 132, 148, 255});
+}
+
+void Game::drawSettings() const {
+    DrawRectangleGradientV(0, 0, kWinW, kWinH, Color{13, 16, 25, 255}, Color{8, 9, 14, 255});
+    for (const Particle& p : ambientParticles) {
+        DrawCircleV(p.pos, p.size, p.color);
+    }
+    for (int x = kCell; x < kWinW; x += kCell * 2) {
+        DrawLine(x, 0, x, kWinH, Color{22, 26, 36, 150});
+    }
+
+    const char* title = "SETTINGS";
+    constexpr int titleSize = 40;
+    const int titleW = MeasureText(title, titleSize);
+    DrawText(title, (kWinW - titleW) / 2 + 2, 42, titleSize, Color{28, 62, 48, 255});
+    DrawText(title, (kWinW - titleW) / 2, 40, titleSize, kSnakeHead);
+
+    const Rectangle card{160.0f, 94.0f, 640.0f, 344.0f};
+    DrawRectangleRounded(card, 0.06f, 10, Color{22, 25, 36, 242});
+    DrawRectangleRoundedLinesEx(card, 0.06f, 10, 1.6f, Color{55, 62, 82, 255});
+
+    for (int i = 0; i < kSettingRowCount; ++i) {
+        const Rectangle row = ui::settingsRowRect(i);
+        const bool selected = (i == settingsIndex);
+        const bool hovered = CheckCollisionPointRec(uiMouse, row);
+        Color fill{26, 30, 42, 255};
+        if (selected) {
+            fill = Color{36, 52, 74, 255};
+        } else if (hovered) {
+            fill = Color{32, 38, 54, 255};
+        }
+        DrawRectangleRounded(row, 0.35f, 6, fill);
+        if (selected) {
+            DrawRectangleRoundedLinesEx(row, 0.35f, 6, 1.4f, kCyan);
+        }
+
+        DrawText(settingName(i), static_cast<int>(row.x + 14), static_cast<int>(row.y + 7), 13,
+                 selected ? kText : Color{180, 190, 210, 255});
+
+        const std::string value = settingLabel(settings, i);
+        const float zoneL = row.x + row.width - 200.0f;
+        const float zoneR = row.x + row.width - 36.0f;
+        const int valueW = MeasureText(value.c_str(), 13);
+        if (i != RowReset) {
+            DrawText("<", static_cast<int>(zoneL), static_cast<int>(row.y + 6), 14,
+                     selected ? kCyan : Color{110, 120, 140, 255});
+            DrawText(">", static_cast<int>(zoneR), static_cast<int>(row.y + 6), 14,
+                     selected ? kCyan : Color{110, 120, 140, 255});
+        }
+        DrawText(value.c_str(),
+                 static_cast<int>((zoneL + zoneR) * 0.5f - static_cast<float>(valueW) * 0.5f),
+                 static_cast<int>(row.y + 7), 13,
+                 selected ? kGold : Color{150, 200, 225, 255});
+    }
+
+    drawButton(ui::settingsBackRect(), "BACK", true, false,
+               CheckCollisionPointRec(uiMouse, ui::settingsBackRect()));
+
+    const char* hint = "UP/DOWN select  |  LEFT/RIGHT change  |  ENTER cycle  |  ESC back";
+    constexpr int hintSize = 12;
+    const int hintW = MeasureText(hint, hintSize);
+    DrawText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});
 }
 
 } // namespace snake

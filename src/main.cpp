@@ -35,6 +35,13 @@ int main() {
 
         if (IsKeyPressed(KEY_F11) || game.takeFullscreenRequest()) {
             ToggleFullscreen();
+            // Keep the persisted option in sync with the F11 shortcut.
+            game.settings.fullscreen = IsWindowFullscreen() ? 1 : 0;
+            game.persistSettings();
+        }
+        if (game.windowSettingsDirty) {
+            game.applyWindowSettings();
+            game.windowSettingsDirty = false;
         }
 
         const float screenW = static_cast<float>(GetScreenWidth());

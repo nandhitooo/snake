@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/config.hpp"
+#include "game/settings.hpp"
 
 #include <deque>
 #include <random>
@@ -20,7 +21,7 @@ enum class Dir { Up, Down, Left, Right };
 
 enum class Effect { Bonus, Slow, Haste, Grow, Trim, Cleanse, Curse };
 
-enum class Mode { Menu, Playing };
+enum class Mode { Menu, Playing, Settings, Skins };
 
 // Camera rigs available while playing (C cycles through them).
 enum class CameraMode { Iso, Top, Third };
@@ -140,6 +141,14 @@ struct Game {
     bool quit = false;
     Mode mode = Mode::Menu;
     bool fsRequest = false;
+
+    // Persisted options + settings-screen state
+    Settings settings;
+    int settingsIndex = 0;
+    Mode settingsReturn = Mode::Menu;
+    bool windowSettingsDirty = false;
+    float normalTick = kNormalTick;
+    bool shakeEnabled = true;
     int score = 0;
     int highScore = 0; // session only
     float survival = 0.0f;
@@ -185,6 +194,9 @@ struct Game {
     void initAmbientParticles();
     void updateVfx(float dt);
     void updateCamera(float dt);
+    void applySettings();
+    void applyWindowSettings();
+    void persistSettings();
 
     // Skin hooks: Phase 2 uses the classic palette, Phase 5 makes these skin-aware.
     Color headColor() const;
@@ -196,6 +208,7 @@ struct Game {
     void drawButton(const Rectangle& r, const char* label, bool enabled, bool active,
                     bool hovered) const;
     void drawMenu() const;
+    void drawSettings() const;
     void draw() const;
 };
 

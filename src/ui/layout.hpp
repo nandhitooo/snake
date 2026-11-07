@@ -35,8 +35,27 @@ inline Rectangle quitRect() {
                      44.0f};
 }
 
-inline Rectangle menuPlayRect() { return Rectangle{340.0f, 254.0f, 280.0f, 56.0f}; }
-inline Rectangle menuFullscreenRect() { return Rectangle{340.0f, 322.0f, 280.0f, 56.0f}; }
-inline Rectangle menuQuitRect() { return Rectangle{340.0f, 390.0f, 280.0f, 56.0f}; }
+// Main menu: five 50 px slots between the motif (y~188) and the hint line.
+inline Rectangle menuPlayRect() { return Rectangle{340.0f, 220.0f, 280.0f, 50.0f}; }
+inline Rectangle menuSkinsRect() { return Rectangle{340.0f, 274.0f, 280.0f, 50.0f}; }
+inline Rectangle menuSettingsRect() { return Rectangle{340.0f, 328.0f, 280.0f, 50.0f}; }
+inline Rectangle menuFullscreenRect() { return Rectangle{340.0f, 382.0f, 280.0f, 50.0f}; }
+inline Rectangle menuQuitRect() { return Rectangle{340.0f, 436.0f, 280.0f, 50.0f}; }
+
+// Settings screen rows (10) and its back button.
+inline Rectangle settingsRowRect(int index) {
+    return Rectangle{200.0f, 132.0f + static_cast<float>(index) * 30.0f, 560.0f, 26.0f};
+}
+inline Rectangle settingsBackRect() { return Rectangle{380.0f, 452.0f, 200.0f, 40.0f}; }
+
+// Pause card (shared by renderer and input so hit boxes match the drawing).
+inline Rectangle pauseCardRect() {
+    return Rectangle{static_cast<float>(kArenaX + (kArenaW - 320) / 2),
+                     static_cast<float>(kArenaY + (kArenaH - 200) / 2), 320.0f, 200.0f};
+}
+inline Rectangle pauseSettingsRect() {
+    const Rectangle card = pauseCardRect();
+    return Rectangle{card.x + 90.0f, card.y + 116.0f, 140.0f, 34.0f};
+}
 
 } // namespace snake::ui

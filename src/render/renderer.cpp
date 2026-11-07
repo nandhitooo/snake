@@ -313,6 +313,15 @@ void Game::draw() const {
         DrawCircleV(p.pos, p.size, p.color);
     }
 
+    if (mode == Mode::Settings) {
+        drawSettings();
+        if (transitionT > 0.0f) {
+            DrawRectangle(0, 0, kWinW, kWinH,
+                          Color{8, 9, 14, static_cast<unsigned char>(255.0f * transitionT)});
+        }
+        return;
+    }
+
     if (mode == Mode::Menu) {
         drawMenu();
         if (transitionT > 0.0f) {
@@ -412,8 +421,7 @@ void Game::draw() const {
     // Pause overlay.
     if (paused && !over) {
         DrawRectangle(kArenaX, kArenaY, kArenaW, kArenaH, Color{10, 12, 18, 175});
-        const Rectangle pCard{static_cast<float>(kArenaX + (kArenaW - 320) / 2),
-                              static_cast<float>(kArenaY + (kArenaH - 170) / 2), 320.0f, 170.0f};
+        const Rectangle pCard = ui::pauseCardRect();
         DrawRectangleRounded(
             Rectangle{pCard.x - 3.0f, pCard.y - 3.0f, pCard.width + 6.0f, pCard.height + 6.0f},
             0.16f, 8, Color{0, 0, 0, 95});
@@ -437,11 +445,14 @@ void Game::draw() const {
         DrawText(prompt1, static_cast<int>(pCard.x + (pCard.width - pr1w) * 0.5f),
                  static_cast<int>(pCard.y + 100), pr1Size, Color{170, 180, 205, 255});
 
-        const char* prompt2 = TextFormat("ESC for Main Menu   |   Camera: %s", cameraLabel(cameraMode));
+        const Rectangle sBtn = ui::pauseSettingsRect();
+        drawButton(sBtn, "SETTINGS", true, false, CheckCollisionPointRec(uiMouse, sBtn));
+
+        const char* prompt2 = TextFormat("ESC: Menu   |   Camera: %s", cameraLabel(cameraMode));
         constexpr int pr2Size = 12;
         const int pr2w = MeasureText(prompt2, pr2Size);
         DrawText(prompt2, static_cast<int>(pCard.x + (pCard.width - pr2w) * 0.5f),
-                 static_cast<int>(pCard.y + 126), pr2Size, Color{125, 135, 155, 255});
+                 static_cast<int>(pCard.y + 166), pr2Size, Color{125, 135, 155, 255});
     }
 
     // Top HUD bar (full width so the 3D scene sits behind it cleanly).

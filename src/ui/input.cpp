@@ -5,6 +5,11 @@ namespace snake {
 
 void Game::handleInput() {
     if (IsKeyPressed(KEY_ESCAPE)) {
+        if (mode == Mode::Settings || mode == Mode::Skins) {
+            mode = (mode == Mode::Settings) ? settingsReturn : Mode::Menu;
+            transitionT = animations ? 1.0f : 0.0f;
+            return;
+        }
         if (mode == Mode::Menu) {
             quit = true;
         } else {
@@ -17,6 +22,38 @@ void Game::handleInput() {
             uiBoostHeld = false;
             transitionT = animations ? 1.0f : 0.0f;
         }
+        return;
+    }
+    if (mode == Mode::Settings) {
+        const int count = kSettingRowCount;
+        if (IsKeyPressed(KEY_UP)) {
+            settingsIndex = (settingsIndex + count - 1) % count;
+        }
+        if (IsKeyPressed(KEY_DOWN)) {
+            settingsIndex = (settingsIndex + 1) % count;
+        }
+        int delta = 0;
+        if (IsKeyPressed(KEY_LEFT)) {
+            delta = -1;
+        }
+        if (IsKeyPressed(KEY_RIGHT)) {
+            delta = 1;
+        }
+        if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) || IsKeyPressed(KEY_SPACE)) {
+            delta = 1;
+        }
+        if (delta != 0) {
+            if (settingsIndex == RowReset) {
+                settings = Settings{};
+            } else {
+                adjustSetting(settings, settingsIndex, delta);
+            }
+            applySettings();
+            persistSettings();
+        }
+        return;
+    }
+    if (mode == Mode::Skins) {
         return;
     }
     if (mode == Mode::Menu) {
@@ -86,10 +123,46 @@ void Game::handleInput() {
 void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
     uiMouse = mouse;
     uiBoostHeld = false;
+
+    if (mode == Mode::Settings) {
+        if (pressed) {
+            if (CheckCollisionPointRec(mouse, ui::settingsBackRect())) {
+                mode = settingsReturn;
+                transitionT = animations ? 1.0f : 0.0f;
+                return;
+            }
+            for (int i = 0; i < kSettingRowCount; ++i) {
+                const Rectangle row = ui::settingsRowRect(i);
+                if (!CheckCollisionPointRec(mouse, row)) {
+                    continue;
+                }
+                settingsIndex = i;
+                const int delta = (mouse.x < row.x + row.width * 0.5f) ? -1 : 1;
+                if (i == RowReset) {
+                    settings = Settings{};
+                } else {
+                    adjustSetting(settings, i, delta);
+                }
+                applySettings();
+                persistSettings();
+                return;
+            }
+        }
+        return;
+    }
+    if (mode == Mode::Skins) {
+        return;
+    }
+
     if (mode == Mode::Menu) {
         if (pressed) {
             if (CheckCollisionPointRec(mouse, ui::menuPlayRect())) {
                 startGame();
+            } else if (CheckCollisionPointRec(mouse, ui::menuSettingsRect())) {
+                settingsReturn = Mode::Menu;
+                settingsIndex = 0;
+                mode = Mode::Settings;
+                transitionT = animations ? 1.0f : 0.0f;
             } else if (CheckCollisionPointRec(mouse, ui::menuFullscreenRect())) {
                 fsRequest = true;
             } else if (CheckCollisionPointRec(mouse, ui::menuQuitRect())) {
@@ -109,6 +182,13 @@ void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
     {
         if (pressed && CheckCollisionPointRec(mouse, ui::pauseRect())) {
             togglePause();
+        }
+        if (paused && pressed && CheckCollisionPointRec(mouse, ui::pauseSettingsRect())) {
+            settingsReturn = Mode::Playing;
+            settingsIndex = 0;
+            mode = Mode::Settings;
+            transitionT = animations ? 1.0f : 0.0f;
+            return;
         }
         if (!paused) {
             uiBoostHeld = down && CheckCollisionPointRec(mouse, ui::boostRect());

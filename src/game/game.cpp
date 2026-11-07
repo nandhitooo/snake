@@ -32,8 +32,10 @@ const char* effectName(Effect e) {
 }
 
 Game::Game() {
+    settings = loadSettings("settings.cfg");
     initAmbientParticles();
     reset();
+    applySettings();
     camera.up = Vector3{0.0f, 1.0f, 0.0f};
     camera.fovy = 45.0f;
     camera.projection = CAMERA_PERSPECTIVE;
@@ -88,6 +90,7 @@ void Game::reset() {
 
 void Game::startGame() {
     reset();
+    cameraMode = static_cast<CameraMode>(std::clamp(settings.camera, 0, 2));
     mode = Mode::Playing;
     transitionT = animations ? 1.0f : 0.0f;
 }
@@ -103,7 +106,8 @@ bool Game::boostActive() const {
 }
 
 float Game::tickInterval() const {
-    const float base = boostActive() ? kBoostTick : kNormalTick;
+    // normalTick is runtime so the Speed setting can change it without a restart.
+    const float base = boostActive() ? normalTick * 0.5f : normalTick;
     return base * speedFactor;
 }
 
@@ -490,7 +494,9 @@ void Game::spawnParticles(Vector3 pos, Color color, int count, float speed, floa
     std::uniform_real_distribution<float> distLf(life * 0.6f, life * 1.2f);
     std::uniform_real_distribution<float> distUp(0.15f, 1.0f);
 
-    for (int i = 0; i < count; ++i) {
+    const float scale = particleScale(settings.particles);
+    const int scaled = std::max(0, static_cast<int>(std::lround(static_cast<float>(count) * scale)));
+    for (int i = 0; i < scaled; ++i) {
         const float ang = distAngle(rng);
         const float spd = distSpd(rng);
         WorldParticle p;
@@ -516,6 +522,9 @@ void Game::addFloatingText(const std::string& text, Vector3 pos, Color color, fl
 }
 
 void Game::triggerShake(float duration, float intensity) {
+    if (!shakeEnabled) {
+        return;
+    }
     shakeTimer = duration;
     shakeIntensity = intensity;
 }
@@ -738,6 +747,34 @@ Color Game::snakeColorAt(size_t index, size_t count) const {
     };
     return Color{mix(kSnakeHead.r, kSnakeTail.r, t), mix(kSnakeHead.g, kSnakeTail.g, t),
                  mix(kSnakeHead.b, kSnakeTail.b, t), 255};
+}
+
+void Game::applySettings() {
+    normalTick = kNormalTick * speedTickScale(settings.speed);
+    animations = settings.animations != 0;
+    shakeEnabled = settings.shake != 0;
+    cameraMode = static_cast<CameraMode>(std::clamp(settings.camera, 0, 2));
+    windowSettingsDirty = true;
+}
+
+void Game::persistSettings() { saveSettings(settings, "settings.cfg"); }
+
+// Window-level options cannot go through the canvas: apply them to the real window.
+void Game::applyWindowSettings() {
+    const bool wantFullscreen = settings.fullscreen != 0;
+    if (IsWindowFullscreen() != wantFullscreen) {
+        ToggleFullscreen();
+    }
+    if (!wantFullscreen) {
+        const int index = std::clamp(settings.resolution, 0, kResolutionCount - 1);
+        SetWindowSize(kResolutions[index].w, kResolutions[index].h);
+    }
+    if (settings.vsync != 0) {
+        SetWindowState(FLAG_VSYNC_HINT);
+    } else {
+        ClearWindowState(FLAG_VSYNC_HINT);
+    }
+    SetTargetFPS(fpsTarget(settings.fpsLimit));
 }
 
 void Game::gameOver() {

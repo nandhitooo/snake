@@ -1,5 +1,6 @@
 #include "game/game.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 
@@ -33,6 +34,12 @@ const char* effectName(Effect e) {
 Game::Game() {
     initAmbientParticles();
     reset();
+    camera.up = Vector3{0.0f, 1.0f, 0.0f};
+    camera.fovy = 45.0f;
+    camera.projection = CAMERA_PERSPECTIVE;
+    camera.position = Vector3{0.0f, 22.0f, 17.0f};
+    camera.target = Vector3{0.0f, 0.0f, 0.0f};
+    camTarget = Vector3{0.0f, 0.0f, 0.0f};
 }
 
 void Game::reset() {
@@ -42,6 +49,8 @@ void Game::reset() {
     snake.push_back(Cell{cx, cy}); // head, moving right
     snake.push_back(Cell{cx - 1, cy});
     snake.push_back(Cell{cx - 2, cy});
+    prevSnake = snake;
+    tickAlpha = 0.0f;
     dir = Dir::Right;
     buffered = Dir::Right;
     hasBuffered = false;
@@ -361,6 +370,9 @@ void Game::update() {
         return;
     }
 
+    // Snapshot for the render interpolation between this tick and the next one.
+    prevSnake = snake;
+
     if (hasBuffered) {
         if (!isOpposite(buffered, dir)) {
             dir = buffered;
@@ -417,25 +429,23 @@ void Game::update() {
         if (highScore > 0 && score > highScore) {
             isNewHighRecord = true;
         }
-        const Vector2 fPos{static_cast<float>(kArenaX + food.x * kCell + kCell / 2),
-                           static_cast<float>(kArenaY + food.y * kCell + kCell / 2)};
-        spawnParticles(fPos, kFood, 14, 80.0f, 3.5f, 0.45f);
-        spawnParticles(fPos, Color{255, 230, 160, 255}, 6, 50.0f, 2.5f, 0.35f);
-        addFloatingText("+10", Vector2{fPos.x, fPos.y - 12.0f}, kGood, 0.9f);
+        const Vector3 fPos = cellToWorld(food, 0.8f);
+        spawnParticles(fPos, kFood, 14, 4.5f, 0.16f, 0.45f);
+        spawnParticles(fPos, Color{255, 230, 160, 255}, 6, 3.0f, 0.11f, 0.35f);
+        addFloatingText("+10", Vector3{fPos.x, 1.3f, fPos.z}, kGood, 0.9f);
         spawnFood();
     } else if (eatsSpecial) {
         score += 10;
         if (highScore > 0 && score > highScore) {
             isNewHighRecord = true;
         }
-        const Vector2 sfPos{static_cast<float>(kArenaX + specialFood.x * kCell + kCell / 2),
-                            static_cast<float>(kArenaY + specialFood.y * kCell + kCell / 2)};
+        const Vector3 sfPos = cellToWorld(specialFood, 0.9f);
         hasSpecial = false;
         applyEffect(specialEffect);
-        spawnParticles(sfPos, kSpecial, 22, 110.0f, 4.0f, 0.6f);
-        spawnParticles(sfPos, kSpecialHalo, 12, 85.0f, 3.0f, 0.5f);
+        spawnParticles(sfPos, kSpecial, 22, 5.5f, 0.18f, 0.6f);
+        spawnParticles(sfPos, kSpecialHalo, 12, 4.0f, 0.13f, 0.5f);
         triggerShake(0.18f, 2.8f);
-        addFloatingText(fxText, Vector2{sfPos.x, sfPos.y - 14.0f}, fxColor, 1.3f);
+        addFloatingText(fxText, Vector3{sfPos.x, 1.5f, sfPos.z}, fxColor, 1.3f);
     } else {
         snake.pop_back();
     }
@@ -463,27 +473,30 @@ void Game::initAmbientParticles() {
     }
 }
 
-void Game::spawnParticles(Vector2 pos, Color color, int count, float speed, float size, float life) {
+void Game::spawnParticles(Vector3 pos, Color color, int count, float speed, float size, float life,
+                          bool gravity) {
     std::uniform_real_distribution<float> distAngle(0.0f, 6.2831853f);
     std::uniform_real_distribution<float> distSpd(speed * 0.35f, speed);
     std::uniform_real_distribution<float> distSz(size * 0.6f, size * 1.3f);
     std::uniform_real_distribution<float> distLf(life * 0.6f, life * 1.2f);
+    std::uniform_real_distribution<float> distUp(0.15f, 1.0f);
 
     for (int i = 0; i < count; ++i) {
         const float ang = distAngle(rng);
         const float spd = distSpd(rng);
-        Particle p;
+        WorldParticle p;
         p.pos = pos;
-        p.vel = Vector2{std::cos(ang) * spd, std::sin(ang) * spd};
+        p.vel = Vector3{std::cos(ang) * spd, distUp(rng) * spd, std::sin(ang) * spd};
         p.color = color;
         p.size = distSz(rng);
         p.life = distLf(rng);
         p.maxLife = p.life;
+        p.gravity = gravity;
         particles.push_back(p);
     }
 }
 
-void Game::addFloatingText(const std::string& text, Vector2 pos, Color color, float duration) {
+void Game::addFloatingText(const std::string& text, Vector3 pos, Color color, float duration) {
     FloatingText ft;
     ft.text = text;
     ft.pos = pos;
@@ -544,8 +557,17 @@ void Game::updateVfx(float dt) {
     for (size_t i = 0; i < particles.size();) {
         particles[i].pos.x += particles[i].vel.x * dt;
         particles[i].pos.y += particles[i].vel.y * dt;
+        particles[i].pos.z += particles[i].vel.z * dt;
+        if (particles[i].gravity) {
+            particles[i].vel.y -= 9.0f * dt;
+        }
         particles[i].vel.x *= 0.94f;
-        particles[i].vel.y *= 0.94f;
+        particles[i].vel.y *= 0.97f;
+        particles[i].vel.z *= 0.94f;
+        if (particles[i].pos.y < 0.06f) {
+            particles[i].pos.y = 0.06f;
+            particles[i].vel.y = std::fabs(particles[i].vel.y) * 0.3f;
+        }
         particles[i].life -= dt;
         if (particles[i].life <= 0.0f) {
             particles.erase(particles.begin() + static_cast<std::ptrdiff_t>(i));
@@ -555,7 +577,7 @@ void Game::updateVfx(float dt) {
     }
 
     for (size_t i = 0; i < floatingTexts.size();) {
-        floatingTexts[i].pos.y -= 24.0f * dt;
+        floatingTexts[i].pos.y += 0.9f * dt;
         floatingTexts[i].life -= dt;
         if (floatingTexts[i].life <= 0.0f) {
             floatingTexts.erase(floatingTexts.begin() + static_cast<std::ptrdiff_t>(i));
@@ -568,6 +590,7 @@ void Game::updateVfx(float dt) {
 // Frame driver: survival score, obstacle timers, and tick accumulation.
 void Game::stepFrame(float dt) {
     updateVfx(dt);
+    updateCamera(dt);
 
     if (mode == Mode::Menu || paused) {
         return;
@@ -588,9 +611,8 @@ void Game::stepFrame(float dt) {
 
     if (boostActive() && !snake.empty()) {
         const Cell& tail = snake.back();
-        const Vector2 tPos{static_cast<float>(kArenaX + tail.x * kCell + kCell / 2),
-                           static_cast<float>(kArenaY + tail.y * kCell + kCell / 2)};
-        spawnParticles(tPos, Color{100, 240, 200, 180}, 1, 30.0f, 2.2f, 0.25f);
+        const Vector3 tPos = cellToWorld(tail, 0.35f);
+        spawnParticles(tPos, Color{100, 240, 200, 180}, 1, 1.6f, 0.1f, 0.25f, false);
     }
 
     survival += dt;
@@ -622,6 +644,76 @@ void Game::stepFrame(float dt) {
     if (accumulator > 1.0f) {
         accumulator = 0.0f; // recover from long stalls without bursting
     }
+    const float interval = tickInterval();
+    tickAlpha = (interval > 0.0f) ? std::clamp(accumulator / interval, 0.0f, 1.0f) : 0.0f;
+}
+
+// Smooth camera rig: follows the head at 45% so the arena stays readable.
+void Game::updateCamera(float dt) {
+    const float k = 1.0f - std::exp(-7.0f * dt);
+    Vector3 focus{0.0f, 0.0f, 0.0f};
+    if (mode == Mode::Playing && !snake.empty()) {
+        const Vector3 head = cellToWorld(snake.front(), 0.0f);
+        focus.x = head.x * 0.45f;
+        focus.z = head.z * 0.45f;
+    }
+    if (dt <= 0.0f) {
+        camTarget = focus;
+    } else {
+        camTarget.x += (focus.x - camTarget.x) * k;
+        camTarget.y = 0.0f;
+        camTarget.z += (focus.z - camTarget.z) * k;
+    }
+
+    const Vector3 forward = dirToWorld(dir);
+    Vector3 desired{0.0f, 0.0f, 0.0f};
+    Vector3 look = camTarget;
+    float fovy = 45.0f;
+    switch (cameraMode) {
+    case CameraMode::Top:
+        desired = Vector3{camTarget.x, 25.0f, camTarget.z + 0.01f};
+        look = Vector3{camTarget.x, 0.0f, camTarget.z};
+        break;
+    case CameraMode::Third:
+        desired = Vector3{camTarget.x - forward.x * 7.5f, 5.2f, camTarget.z - forward.z * 7.5f};
+        look = Vector3{camTarget.x + forward.x * 2.5f, 0.7f, camTarget.z + forward.z * 2.5f};
+        fovy = 55.0f;
+        break;
+    case CameraMode::Iso:
+    default:
+        desired = Vector3{camTarget.x, 22.0f, camTarget.z + 17.0f};
+        look = camTarget;
+        break;
+    }
+
+    if (dt <= 0.0f) {
+        camera.position = desired;
+        camera.target = look;
+    } else {
+        camera.position.x += (desired.x - camera.position.x) * k;
+        camera.position.y += (desired.y - camera.position.y) * k;
+        camera.position.z += (desired.z - camera.position.z) * k;
+        camera.target.x += (look.x - camera.target.x) * k;
+        camera.target.y += (look.y - camera.target.y) * k;
+        camera.target.z += (look.z - camera.target.z) * k;
+    }
+    camera.up = Vector3{0.0f, 1.0f, 0.0f};
+    camera.fovy = fovy;
+    camera.projection = CAMERA_PERSPECTIVE;
+}
+
+Color Game::headColor() const { return kSnakeHead; }
+
+Color Game::eyeColor() const { return kEye; }
+
+Color Game::snakeColorAt(size_t index, size_t count) const {
+    const float t = (count > 1) ? static_cast<float>(index) / static_cast<float>(count - 1) : 0.0f;
+    const auto mix = [](unsigned char a, unsigned char b, float k) {
+        return static_cast<unsigned char>(static_cast<float>(a) +
+                                          (static_cast<float>(b) - static_cast<float>(a)) * k);
+    };
+    return Color{mix(kSnakeHead.r, kSnakeTail.r, t), mix(kSnakeHead.g, kSnakeTail.g, t),
+                 mix(kSnakeHead.b, kSnakeTail.b, t), 255};
 }
 
 void Game::gameOver() {
@@ -638,10 +730,9 @@ void Game::gameOver() {
     triggerShake(0.35f, 4.5f);
     if (!snake.empty()) {
         const Cell& h = snake.front();
-        const Vector2 hPos{static_cast<float>(kArenaX + h.x * kCell + kCell / 2),
-                           static_cast<float>(kArenaY + h.y * kCell + kCell / 2)};
-        spawnParticles(hPos, Color{255, 75, 75, 255}, 28, 120.0f, 4.0f, 0.7f);
-        spawnParticles(hPos, Color{255, 200, 60, 255}, 16, 90.0f, 3.0f, 0.5f);
+        const Vector3 hPos = cellToWorld(h, 0.7f);
+        spawnParticles(hPos, Color{255, 75, 75, 255}, 28, 6.0f, 0.2f, 0.7f);
+        spawnParticles(hPos, Color{255, 200, 60, 255}, 16, 4.5f, 0.15f, 0.5f);
     }
 }
 

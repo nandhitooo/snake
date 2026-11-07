@@ -22,6 +22,9 @@ enum class Effect { Bonus, Slow, Haste, Grow, Trim, Cleanse, Curse };
 
 enum class Mode { Menu, Playing };
 
+// Camera rigs available while playing (C cycles through them).
+enum class CameraMode { Iso, Top, Third };
+
 struct Warning {
     Cell cell;
     float timer = kWarningTime;
@@ -41,6 +44,18 @@ struct GhostHead {
     float maxLife = 0.0f;
 };
 
+// Sparks/bursts live in arena world space (1 unit == 1 cell).
+struct WorldParticle {
+    Vector3 pos{0.0f, 0.0f, 0.0f};
+    Vector3 vel{0.0f, 0.0f, 0.0f};
+    Color color{255, 255, 255, 255};
+    float size = 0.12f;
+    float life = 0.0f;
+    float maxLife = 1.0f;
+    bool gravity = false;
+};
+
+// Screen-space ambient motes used by the menu and the outer chrome.
 struct Particle {
     Vector2 pos{0.0f, 0.0f};
     Vector2 vel{0.0f, 0.0f};
@@ -52,11 +67,32 @@ struct Particle {
 
 struct FloatingText {
     std::string text;
-    Vector2 pos{0.0f, 0.0f};
+    Vector3 pos{0.0f, 0.0f, 0.0f};
     Color color{255, 255, 255, 255};
     float life = 0.0f;
     float maxLife = 1.0f;
 };
+
+// Cell (column, row) -> arena world space. The arena is centred on the origin so
+// eyes/lights can stay at a fixed place while the camera follows the snake.
+inline Vector3 cellToWorld(const Cell& c, float y = 0.0f) {
+    return Vector3{(static_cast<float>(c.x) + 0.5f) - static_cast<float>(kCols) * 0.5f, y,
+                   (static_cast<float>(c.y) + 0.5f) - static_cast<float>(kRows) * 0.5f};
+}
+
+inline Vector3 dirToWorld(Dir d) {
+    switch (d) {
+    case Dir::Up:
+        return Vector3{0.0f, 0.0f, -1.0f};
+    case Dir::Down:
+        return Vector3{0.0f, 0.0f, 1.0f};
+    case Dir::Left:
+        return Vector3{-1.0f, 0.0f, 0.0f};
+    case Dir::Right:
+    default:
+        return Vector3{1.0f, 0.0f, 0.0f};
+    }
+}
 
 bool isOpposite(Dir a, Dir b);
 const char* effectName(Effect e);
@@ -64,15 +100,17 @@ const char* effectName(Effect e);
 struct Game {
 
     std::deque<Cell> snake;         // front == head
+    std::deque<Cell> prevSnake;     // positions before the last logic tick (render interpolation)
     std::deque<Obstacle> obstacles; // solid obstacles, front == oldest
     std::vector<Warning> warnings;
     std::vector<GhostHead> ghosts;
-    std::vector<Particle> particles;
+    std::vector<WorldParticle> particles;
     std::vector<Particle> ambientParticles;
     std::vector<FloatingText> floatingTexts;
     float shakeTimer = 0.0f;
     float shakeIntensity = 0.0f;
     float animTime = 0.0f;
+    float tickAlpha = 0.0f; // 0..1 progress inside the current logic tick
     bool isNewHighRecord = false;
     bool hasSpecial = false;
     Cell specialFood{0, 0};
@@ -105,6 +143,11 @@ struct Game {
     int boostTicks = 0;
     std::mt19937 rng{std::random_device{}()};
 
+    // 3D presentation state
+    Camera3D camera{};
+    CameraMode cameraMode = CameraMode::Iso;
+    Vector3 camTarget{0.0f, 0.0f, 0.0f};
+
     Game();
     void reset();
     void startGame();
@@ -129,12 +172,19 @@ struct Game {
     void stepFrame(float dt);
     void gameOver();
     void togglePause();
-    void spawnParticles(Vector2 pos, Color color, int count, float speed = 70.0f,
-                        float size = 3.5f, float life = 0.5f);
-    void addFloatingText(const std::string& text, Vector2 pos, Color color, float duration = 1.0f);
+    void spawnParticles(Vector3 pos, Color color, int count, float speed = 4.0f,
+                        float size = 0.14f, float life = 0.5f, bool gravity = true);
+    void addFloatingText(const std::string& text, Vector3 pos, Color color, float duration = 1.0f);
     void triggerShake(float duration, float intensity);
     void initAmbientParticles();
     void updateVfx(float dt);
+    void updateCamera(float dt);
+
+    // Skin hooks: Phase 2 uses the classic palette, Phase 5 makes these skin-aware.
+    Color headColor() const;
+    Color snakeColorAt(size_t index, size_t count) const;
+    Color eyeColor() const;
+
     void drawEyes() const;
     void drawGhostHead(const GhostHead& g) const;
     void drawButton(const Rectangle& r, const char* label, bool enabled, bool active,

@@ -38,6 +38,12 @@ void Game::handleInput() {
         return;
     }
 
+    if (IsKeyPressed(KEY_C)) {
+        cameraMode = (cameraMode == CameraMode::Iso)   ? CameraMode::Top
+                     : (cameraMode == CameraMode::Top) ? CameraMode::Third
+                                                       : CameraMode::Iso;
+    }
+
     if (paused) {
         return;
     }

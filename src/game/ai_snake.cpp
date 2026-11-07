@@ -191,6 +191,8 @@ void eatAiSnake(Game& g, size_t index) {
     g.addFloatingText("+" + std::to_string(points), cellToWorld(head, 1.5f), kGood, 1.1f);
     g.spawnParticles(cellToWorld(head, 0.6f), Color{120, 255, 160, 220}, 18, 5.0f, 0.18f, 0.6f);
     audio.play(SfxId::EatAiSnake);
+    // AI are eaten immediately (no deferred bite), so the jaw snaps right away.
+    g.triggerBite();
     killAi(ai);
 }
 

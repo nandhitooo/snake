@@ -85,6 +85,17 @@ struct Particle {
     float maxLife = 1.0f;
 };
 
+// Food that has been eaten by the logic tick but not yet reached by the visual
+// head. It keeps shrinking toward the mouth until the bite lands (progress 1).
+struct PendingBite {
+    Vector3 pos{0.0f, 0.0f, 0.0f};
+    Color color{255, 255, 255, 255};
+    bool special = false;
+    float progress = 0.0f; // 0..1, driven by tickAlpha
+    std::string label;     // floating text fired when the bite lands
+    Color labelColor{235, 238, 245, 255};
+};
+
 struct FloatingText {
     std::string text;
     Vector3 pos{0.0f, 0.0f, 0.0f};
@@ -187,6 +198,18 @@ struct Game {
     Camera3D camera{};
     CameraMode cameraMode = CameraMode::Iso;
     Vector3 camTarget{0.0f, 0.0f, 0.0f};
+    float camYaw = 0.0f;          // smoothed heading (radians) used by the third-person orbit
+    float camBlend = 0.0f;        // remaining cross-fade time after a camera-mode change
+    Camera3D camFrom{};           // pose captured when the mode changed
+    CameraMode camAppliedMode = CameraMode::Iso;
+    float lastTickInterval = 0.0f; // previous frame's tick interval (alpha continuity)
+
+    // Eating animation state (Phase B)
+    std::deque<PendingBite> pendingBites;
+    float mouthOpen = 0.0f;   // 0..1 smoothed jaw opening
+    float mouthTarget = 0.0f; // 0..1 wanted jaw opening for this frame
+    float biteT = -1.0f;      // seconds since the last bite, <0 == idle
+    float mouthLock = 0.0f;   // short cooldown after a bite, in seconds
 
     Game();
     void reset();
@@ -219,6 +242,15 @@ struct Game {
     void initAmbientParticles();
     void updateVfx(float dt);
     void updateCamera(float dt);
+    void updateMouth(float dt);
+    void resolvePendingBites();
+    void triggerBite();
+    float mouthTargetDistance() const;
+
+    // Interpolated world position of segment `index` (same maths the renderer
+    // uses) so the camera follows the drawn head instead of the logical cell.
+    Vector3 visualSegmentWorld(size_t index, float y) const;
+    Vector3 visualHeadWorld(float y = 0.0f) const { return visualSegmentWorld(0, y); }
     void applySettings();
     void applyWindowSettings();
     void persistSettings();

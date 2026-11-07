@@ -7,6 +7,54 @@
 #include <cstddef>
 
 namespace snake {
+namespace {
+
+// Advance one cell in `d` without wrapping (the caller decides where the arena ends).
+Cell stepRaw(const Cell& c, Dir d) {
+    Cell n = c;
+    switch (d) {
+    case Dir::Up:
+        --n.y;
+        break;
+    case Dir::Down:
+        ++n.y;
+        break;
+    case Dir::Left:
+        --n.x;
+        break;
+    case Dir::Right:
+        ++n.x;
+        break;
+    }
+    return n;
+}
+
+// Arena edges wrap instead of killing. One place for the rule, shared by the
+// logic tick and the mouth look-ahead scan.
+Cell wrapCell(Cell c) {
+    c.x = (c.x + kCols) % kCols;
+    c.y = (c.y + kRows) % kRows;
+    return c;
+}
+
+Cell nextCellWrapped(const Cell& c, Dir d) { return wrapCell(stepRaw(c, d)); }
+
+// Normalise an angle to (-pi, pi] so smoothing always takes the short way round.
+float wrapAngle(float a) {
+    constexpr float kPi = 3.1415927f;
+    constexpr float kTau = 6.2831855f;
+    a = std::fmod(a + kPi, kTau);
+    if (a < 0.0f) {
+        a += kTau;
+    }
+    return a - kPi;
+}
+
+Vector3 lerp3(Vector3 a, Vector3 b, float t) {
+    return Vector3{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t};
+}
+
+} // namespace
 
 bool isOpposite(Dir a, Dir b) {
     return (a == Dir::Up && b == Dir::Down) || (a == Dir::Down && b == Dir::Up) ||
@@ -86,10 +134,19 @@ void Game::reset() {
     scoredSeconds = 0;
     obstacleTimer = 0.0f;
     accumulator = 0.0f;
+    lastTickInterval = 0.0f;
     swallowClock = -1.0f;
     foodAge = 0.0f;
     specialAge = 0.0f;
     overFade = 0.0f;
+    pendingBites.clear();
+    mouthOpen = 0.0f;
+    mouthTarget = 0.0f;
+    biteT = kMouthBiteIdle;
+    mouthLock = 0.0f;
+    camYaw = 0.0f;
+    camBlend = 0.0f;
+    camAppliedMode = cameraMode;
     spawnFood();
 }
 
@@ -409,6 +466,10 @@ void Game::update() {
         return;
     }
 
+    // The previous tick's interval just finished: the visual head has now reached
+    // whatever it ate, so the deferred eating effects (and the bite) fire here.
+    resolvePendingBites();
+
     // Snapshot for the render interpolation between this tick and the next one.
     prevSnake = snake;
 
@@ -430,26 +491,12 @@ void Game::update() {
     }
 
     Cell head = snake.front();
-    switch (dir) {
-    case Dir::Up:
-        --head.y;
-        break;
-    case Dir::Down:
-        ++head.y;
-        break;
-    case Dir::Left:
-        --head.x;
-        break;
-    case Dir::Right:
-        ++head.x;
-        break;
-    }
+    const Cell exitCell = head;
+    const Cell rawHead = stepRaw(head, dir);
 
     // Wrap around the arena edges instead of hitting a wall.
-    const bool wrapped = (head.x < 0 || head.x >= kCols || head.y < 0 || head.y >= kRows);
-    const Cell exitCell = snake.front();
-    head.x = (head.x + kCols) % kCols;
-    head.y = (head.y + kRows) % kRows;
+    const bool wrapped = (rawHead.x < 0 || rawHead.x >= kCols || rawHead.y < 0 || rawHead.y >= kRows);
+    head = wrapCell(rawHead);
     if (wrapped) {
         ghosts.push_back(GhostHead{exitCell, dir, kGhostLife, kGhostLife});
         ghosts.push_back(GhostHead{head, dir, kGhostLife, kGhostLife});
@@ -469,19 +516,21 @@ void Game::update() {
 
     snake.push_front(head);
     if (eats) {
-        swallowClock = 0.0f;
         score += 10;
         if (highScore > 0 && score > highScore) {
             isNewHighRecord = true;
         }
-        const Vector3 fPos = cellToWorld(food, 0.8f);
-        spawnParticles(fPos, kFood, 14, 4.5f, 0.16f, 0.45f);
-        spawnParticles(fPos, Color{255, 230, 160, 255}, 6, 3.0f, 0.11f, 0.35f);
-        addFloatingText("+10", Vector3{fPos.x, 1.3f, fPos.z}, kGood, 0.9f);
-        audio.play(SfxId::EatFood);
+        // Gameplay is instant, visuals are not: the apple keeps shrinking toward
+        // the mouth until the drawn head actually arrives (resolvePendingBites).
+        PendingBite bite;
+        bite.pos = cellToWorld(food, 0.8f);
+        bite.color = kFood;
+        bite.special = false;
+        bite.label = "+10";
+        bite.labelColor = kGood;
+        pendingBites.push_back(bite);
         spawnFood();
     } else if (eatsSpecial) {
-        swallowClock = 0.0f;
         score += 10;
         if (highScore > 0 && score > highScore) {
             isNewHighRecord = true;
@@ -489,10 +538,13 @@ void Game::update() {
         const Vector3 sfPos = cellToWorld(specialFood, 0.9f);
         hasSpecial = false;
         applyEffect(specialEffect);
-        spawnParticles(sfPos, kSpecial, 22, 5.5f, 0.18f, 0.6f);
-        spawnParticles(sfPos, kSpecialHalo, 12, 4.0f, 0.13f, 0.5f);
-        triggerShake(0.18f, 2.8f);
-        addFloatingText(fxText, Vector3{sfPos.x, 1.5f, sfPos.z}, fxColor, 1.3f);
+        PendingBite bite;
+        bite.pos = sfPos;
+        bite.color = kSpecial;
+        bite.special = true;
+        bite.label = fxText;
+        bite.labelColor = fxColor;
+        pendingBites.push_back(bite);
     } else {
         snake.pop_back();
     }
@@ -570,6 +622,7 @@ void Game::togglePause() {
         return;
     }
     paused = !paused;
+    lastTickInterval = tickInterval(); // resume without an alpha jump
     audio.play(paused ? SfxId::Pause : SfxId::Resume);
     if (paused) {
         boostHeld = false;
@@ -738,6 +791,16 @@ void Game::stepFrame(float dt) {
     updateObstacles(dt);
     updateAiSpawner(*this, dt);
 
+    // Boost start/stop and the Slow/Haste effects change the tick interval in the
+    // middle of a tick. Rescaling the accumulator keeps tickAlpha (and therefore
+    // the drawn head) continuous instead of jumping back or forward.
+    const float intervalNow = tickInterval();
+    if (lastTickInterval > 0.0f && intervalNow > 0.0f &&
+        std::fabs(intervalNow - lastTickInterval) > 1e-6f) {
+        accumulator *= intervalNow / lastTickInterval;
+    }
+    lastTickInterval = intervalNow;
+
     accumulator += dt;
     int guard = 0;
     while (!over && accumulator >= tickInterval() && guard++ < 8) {
@@ -748,61 +811,320 @@ void Game::stepFrame(float dt) {
         accumulator = 0.0f; // recover from long stalls without bursting
     }
     const float interval = tickInterval();
+    lastTickInterval = interval;
     tickAlpha = (interval > 0.0f) ? std::clamp(accumulator / interval, 0.0f, 1.0f) : 0.0f;
+
+    updateMouth(dt);
 }
 
-// Smooth camera rig: follows the head at 45% so the arena stays readable.
+// Interpolated world position of one segment. The renderer and the camera both
+// go through here so the rig always follows the head that is actually drawn.
+Vector3 Game::visualSegmentWorld(size_t index, float y) const {
+    if (index >= snake.size()) {
+        return Vector3{0.0f, y, 0.0f};
+    }
+    Vector3 cur = cellToWorld(snake[index], y);
+    if (prevSnake.size() == snake.size() && index < prevSnake.size() && tickAlpha > 0.0f) {
+        const Vector3 prev = cellToWorld(prevSnake[index], y);
+        // A wrapped segment jumps across the arena: never lerp through the floor.
+        if (std::fabs(cur.x - prev.x) <= 1.01f && std::fabs(cur.z - prev.z) <= 1.01f) {
+            cur.x = prev.x + (cur.x - prev.x) * tickAlpha;
+            cur.z = prev.z + (cur.z - prev.z) * tickAlpha;
+        }
+    }
+    return cur;
+}
+
+// Smooth camera rig. The focus tracks the interpolated head (never the logical
+// cell), its speed is capped so a wrap glides instead of snapping, the
+// third-person rig orbits around a smoothed yaw, and mode changes cross-fade.
 void Game::updateCamera(float dt) {
-    const float k = 1.0f - std::exp(-7.0f * dt);
+    dt = std::clamp(dt, 0.0f, kCamMaxDt);
+
+    // --- Heading used by the third-person orbit and by the iso/top look-ahead.
+    Vector3 moveDir = dirToWorld(dir);
+    if (!snake.empty() && prevSnake.size() == snake.size()) {
+        int dx = snake.front().x - prevSnake.front().x;
+        int dy = snake.front().y - prevSnake.front().y;
+        if (dx > 1) {
+            dx -= kCols;
+        } else if (dx < -1) {
+            dx += kCols;
+        }
+        if (dy > 1) {
+            dy -= kRows;
+        } else if (dy < -1) {
+            dy += kRows;
+        }
+        if (std::abs(dx) + std::abs(dy) == 1) {
+            moveDir = Vector3{static_cast<float>(dx), 0.0f, static_cast<float>(dy)};
+        }
+    }
+    const float yawTarget = std::atan2(moveDir.z, moveDir.x);
+    float yawDelta = wrapAngle(yawTarget - camYaw);
+    if (dt > 0.0f) {
+        const float maxStep = kCamYawMaxSpeed * dt;
+        float step = yawDelta * (1.0f - std::exp(-kCamYawSmoothing * dt));
+        if (step > maxStep) {
+            step = maxStep;
+        } else if (step < -maxStep) {
+            step = -maxStep;
+        }
+        camYaw = wrapAngle(camYaw + step);
+    }
+    if (!std::isfinite(camYaw)) {
+        camYaw = yawTarget;
+    }
+    const Vector3 heading{std::cos(camYaw), 0.0f, std::sin(camYaw)};
+
+    // --- Focus: interpolated head, partly damped in the overhead rigs.
     Vector3 focus{0.0f, 0.0f, 0.0f};
     if (mode == Mode::Playing && !snake.empty()) {
-        const Vector3 head = cellToWorld(snake.front(), 0.0f);
-        focus.x = head.x * 0.45f;
-        focus.z = head.z * 0.45f;
+        const Vector3 head = visualHeadWorld(0.0f);
+        const float share = (cameraMode == CameraMode::Third) ? 1.0f : kCamFocusShare;
+        focus.x = head.x * share;
+        focus.z = head.z * share;
+        if (cameraMode != CameraMode::Third) {
+            focus.x += heading.x * kCamLookAhead;
+            focus.z += heading.z * kCamLookAhead;
+        }
     }
     if (dt <= 0.0f) {
         camTarget = focus;
     } else {
-        camTarget.x += (focus.x - camTarget.x) * k;
+        const float k = 1.0f - std::exp(-kCamFocusSmoothing * dt);
+        Vector3 delta{(focus.x - camTarget.x) * k, 0.0f, (focus.z - camTarget.z) * k};
+        const float len = std::sqrt(delta.x * delta.x + delta.z * delta.z);
+        const float maxMove = kCamMaxSpeed * dt;
+        if (len > maxMove && len > 1e-6f) {
+            delta.x *= maxMove / len;
+            delta.z *= maxMove / len;
+        }
+        camTarget.x += delta.x;
+        camTarget.z += delta.z;
         camTarget.y = 0.0f;
-        camTarget.z += (focus.z - camTarget.z) * k;
     }
 
-    const Vector3 forward = dirToWorld(dir);
+    // --- Pose for the current mode.
     Vector3 desired{0.0f, 0.0f, 0.0f};
     Vector3 look = camTarget;
-    float fovy = 45.0f;
+    float fovTarget = kCamFovIso;
     switch (cameraMode) {
     case CameraMode::Top:
-        desired = Vector3{camTarget.x, 25.0f, camTarget.z + 0.01f};
+        desired = Vector3{camTarget.x, kCamTopHeight, camTarget.z + 0.01f};
         look = Vector3{camTarget.x, 0.0f, camTarget.z};
         break;
-    case CameraMode::Third:
-        desired = Vector3{camTarget.x - forward.x * 7.5f, 5.2f, camTarget.z - forward.z * 7.5f};
-        look = Vector3{camTarget.x + forward.x * 2.5f, 0.7f, camTarget.z + forward.z * 2.5f};
-        fovy = 55.0f;
+    case CameraMode::Third: {
+        const float height = std::max(kCamThirdMinHeight, kCamThirdHeight);
+        desired = Vector3{camTarget.x - heading.x * kCamThirdRadius, height,
+                          camTarget.z - heading.z * kCamThirdRadius};
+        look = Vector3{camTarget.x + heading.x * kCamThirdLookAhead, kCamThirdLookY,
+                       camTarget.z + heading.z * kCamThirdLookAhead};
+        fovTarget = kCamFovThird;
         break;
+    }
     case CameraMode::Iso:
     default:
-        desired = Vector3{camTarget.x, 22.0f, camTarget.z + 17.0f};
+        desired = Vector3{camTarget.x, kCamIsoHeight, camTarget.z + kCamIsoBack};
         look = camTarget;
         break;
     }
 
-    if (dt <= 0.0f) {
+    // A mode switch cross-fades from the pose captured at the moment of the switch.
+    if (cameraMode != camAppliedMode) {
+        camFrom = camera;
+        camBlend = kCamModeBlend;
+        camAppliedMode = cameraMode;
+    }
+
+    Vector3 newPos = desired;
+    Vector3 newLook = look;
+    if (cameraMode != CameraMode::Third && dt > 0.0f) {
+        // Overhead rigs can lerp their position: no body sits in front of the lens.
+        const float k = 1.0f - std::exp(-kCamFollowSmoothing * dt);
+        newPos = lerp3(camera.position, desired, k);
+        newLook = lerp3(camera.target, look, k);
+    }
+    // The third-person rig orbits (its position is derived from the smoothed yaw
+    // and focus), so it is set directly rather than lerped through the snake.
+
+    if (camBlend > 0.0f && dt > 0.0f) {
+        camBlend = std::max(0.0f, camBlend - dt);
+        const float t = 1.0f - camBlend / kCamModeBlend;
+        const float s = t * t * (3.0f - 2.0f * t);
+        newPos = lerp3(camFrom.position, newPos, s);
+        newLook = lerp3(camFrom.target, newLook, s);
+    }
+
+    camera.position = newPos;
+    camera.target = newLook;
+    if (dt > 0.0f) {
+        const float fk = 1.0f - std::exp(-kCamFovSmoothing * dt);
+        camera.fovy += (fovTarget - camera.fovy) * fk;
+    } else {
+        camera.fovy = fovTarget;
+    }
+    if (!std::isfinite(camera.position.x) || !std::isfinite(camera.position.y) ||
+        !std::isfinite(camera.position.z) || !std::isfinite(camera.target.x) ||
+        !std::isfinite(camera.target.z) || !std::isfinite(camera.fovy)) {
         camera.position = desired;
         camera.target = look;
-    } else {
-        camera.position.x += (desired.x - camera.position.x) * k;
-        camera.position.y += (desired.y - camera.position.y) * k;
-        camera.position.z += (desired.z - camera.position.z) * k;
-        camera.target.x += (look.x - camera.target.x) * k;
-        camera.target.y += (look.y - camera.target.y) * k;
-        camera.target.z += (look.z - camera.target.z) * k;
+        camera.fovy = fovTarget;
+    }
+    if (camera.position.y < 0.5f) {
+        camera.position.y = 0.5f;
     }
     camera.up = Vector3{0.0f, 1.0f, 0.0f};
-    camera.fovy = fovy;
     camera.projection = CAMERA_PERSPECTIVE;
+}
+
+// Fires the actual eating feedback the moment the drawn head reaches the cell.
+void Game::resolvePendingBites() {
+    if (pendingBites.empty()) {
+        return;
+    }
+    for (const PendingBite& bite : pendingBites) {
+        if (bite.special) {
+            spawnParticles(bite.pos, kSpecial, 22, 5.5f, 0.18f, 0.6f);
+            spawnParticles(bite.pos, kSpecialHalo, 12, 4.0f, 0.13f, 0.5f);
+            triggerShake(0.18f, 2.8f);
+        } else {
+            spawnParticles(bite.pos, kFood, 14, 4.5f, 0.16f, 0.45f);
+            spawnParticles(bite.pos, Color{255, 230, 160, 255}, 6, 3.0f, 0.11f, 0.35f);
+            audio.play(SfxId::EatFood);
+        }
+        addFloatingText(bite.label,
+                        Vector3{bite.pos.x, bite.pos.y + (bite.special ? 0.6f : 0.5f), bite.pos.z},
+                        bite.labelColor, bite.special ? 1.3f : 0.9f);
+    }
+    pendingBites.clear();
+    swallowClock = 0.0f;
+    triggerBite();
+}
+
+void Game::triggerBite() {
+    if (!animations) {
+        biteT = kMouthBiteIdle;
+        mouthLock = 0.0f;
+        mouthOpen = 0.0f;
+        return;
+    }
+    biteT = 0.0f;
+    mouthLock = kMouthLockTime;
+}
+
+// How many cells ahead (0 == right here) an edible target sits, or -1 if the
+// head must keep its mouth shut. Blocks on obstacles and on its own body.
+float Game::mouthTargetDistance() const {
+    if (snake.empty()) {
+        return -1.0f;
+    }
+    // A bite already registered is the nearest target: the apple is moving in.
+    float best = -1.0f;
+    for (const PendingBite& bite : pendingBites) {
+        const float d = 1.0f - std::clamp(bite.progress, 0.0f, 1.0f);
+        if (best < 0.0f || d < best) {
+            best = d;
+        }
+    }
+    if (best >= 0.0f) {
+        return best;
+    }
+
+    Cell c = snake.front();
+    for (int cells = 1; cells <= kMouthScanCells; ++cells) {
+        c = nextCellWrapped(c, dir);
+        if (isSolid(c)) {
+            return -1.0f; // an obstacle blocks the line: stay shut
+        }
+        bool ownBody = false;
+        for (size_t i = 1; i < snake.size(); ++i) {
+            if (snake[i] == c) {
+                ownBody = true;
+                break;
+            }
+        }
+        if (ownBody) {
+            return -1.0f;
+        }
+        bool edible = (c == food) || (hasSpecial && c == specialFood);
+        bool rivalHere = false;
+        if (!edible) {
+            for (const AiSnake& rival : ai) {
+                if (rival.dying) {
+                    continue;
+                }
+                for (const Cell& segment : rival.body) {
+                    if (segment == c) {
+                        rivalHere = true;
+                        edible = rival.body.size() < snake.size();
+                        break;
+                    }
+                }
+                if (rivalHere) {
+                    break;
+                }
+            }
+        }
+        if (rivalHere && !edible) {
+            return -1.0f; // a rival that would kill us: never open for it
+        }
+        if (edible) {
+            return static_cast<float>(cells) + (1.0f - std::clamp(tickAlpha, 0.0f, 1.0f));
+        }
+    }
+    return -1.0f;
+}
+
+// Per-frame jaw animation: open when food is close ahead, snap shut on the bite.
+void Game::updateMouth(float dt) {
+    dt = std::clamp(dt, 0.0f, kCamMaxDt);
+
+    for (PendingBite& bite : pendingBites) {
+        bite.progress = std::clamp(tickAlpha, 0.0f, 1.0f);
+    }
+
+    if (biteT >= 0.0f) {
+        biteT += dt;
+        if (biteT > 0.6f) {
+            biteT = kMouthBiteIdle;
+        }
+    }
+    if (mouthLock > 0.0f) {
+        mouthLock = std::max(0.0f, mouthLock - dt);
+    }
+
+    if (!animations) {
+        mouthTarget = 0.0f;
+        mouthOpen = 0.0f;
+        return;
+    }
+
+    const bool canOpen = mode == Mode::Playing && !paused && !over && mouthLock <= 0.0f;
+    float target = 0.0f;
+    if (canOpen) {
+        const float d = mouthTargetDistance();
+        if (d >= 0.0f && d <= kMouthCloseDistance) {
+            const float span = kMouthCloseDistance - kMouthOpenDistance;
+            const float t = (span > 1e-6f) ? std::clamp((kMouthCloseDistance - d) / span, 0.0f, 1.0f)
+                                           : 1.0f;
+            target = t * t * (3.0f - 2.0f * t);
+        }
+    }
+    mouthTarget = target;
+
+    // The bite closes fast (kMouthCloseBiteTime) no matter how fast it opened.
+    if (biteT >= 0.0f && biteT < kMouthCloseBiteTime && dt > 0.0f) {
+        mouthOpen = std::max(0.0f, mouthOpen - dt / kMouthCloseBiteTime);
+    }
+    const float speed = (mouthTarget > mouthOpen) ? kMouthOpenSpeed : kMouthCloseSpeed;
+    const float step = speed * dt;
+    if (mouthOpen < mouthTarget) {
+        mouthOpen = std::min(mouthTarget, mouthOpen + step);
+    } else {
+        mouthOpen = std::max(mouthTarget, mouthOpen - step);
+    }
+    mouthOpen = std::clamp(mouthOpen, 0.0f, 1.0f);
 }
 
 const SkinDef& Game::skin() const {
@@ -862,6 +1184,12 @@ void Game::applyWindowSettings() {
 
 void Game::gameOver() {
     over = true;
+    // A pending bite never lands if the round ends first: drop it silently.
+    pendingBites.clear();
+    mouthTarget = 0.0f;
+    mouthOpen = 0.0f;
+    biteT = kMouthBiteIdle;
+    mouthLock = 0.0f;
     audio.play(SfxId::GameOver);
     boostHeld = false;
     paused = false;

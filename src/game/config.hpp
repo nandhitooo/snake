@@ -41,6 +41,48 @@ inline constexpr int kGrowSegments = 3;
 inline constexpr int kTrimSegments = 2;
 inline constexpr int kCurseObstacles = 3;
 
+// Camera rig tuning (Phase A). All rates are per second.
+inline constexpr float kCamMaxDt = 0.05f;        // clamp dt so a stall cannot teleport the rig
+inline constexpr float kCamFollowSmoothing = 7.0f; // exp smoothing of orbit camera positions
+inline constexpr float kCamFocusShare = 0.45f;   // iso/top keep only part of the head offset
+inline constexpr float kCamFocusSmoothing = 7.0f;
+inline constexpr float kCamMaxSpeed = 16.0f;     // units/s ceiling for the focus (wrap glide);
+                                                // above the boosted head speed (~12.5 u/s)
+inline constexpr float kCamLookAhead = 1.2f;     // cells of forward bias (iso/top)
+inline constexpr float kCamYawSmoothing = 6.0f;  // heading smoothing for the third-person orbit
+inline constexpr float kCamYawMaxSpeed = 7.0f;   // rad/s angular ceiling
+inline constexpr float kCamThirdRadius = 7.5f;
+inline constexpr float kCamThirdHeight = 5.2f;
+inline constexpr float kCamThirdMinHeight = 1.5f;
+inline constexpr float kCamThirdLookAhead = 2.5f;
+inline constexpr float kCamThirdLookY = 0.7f;
+inline constexpr float kCamIsoHeight = 22.0f;
+inline constexpr float kCamIsoBack = 17.0f;
+inline constexpr float kCamTopHeight = 25.0f;
+inline constexpr float kCamFovIso = 45.0f;
+inline constexpr float kCamFovThird = 55.0f;
+inline constexpr float kCamFovSmoothing = 9.0f;
+inline constexpr float kCamModeBlend = 0.5f;     // cross-fade time when the mode changes
+
+// Eating / mouth animation (Phase B)
+inline constexpr int kMouthScanCells = 3;        // how far ahead the snake looks for food
+inline constexpr float kMouthOpenDistance = 0.8f; // mouth is fully open this many cells away
+inline constexpr float kMouthCloseDistance = 3.0f; // mouth starts opening at this distance
+inline constexpr float kMouthOpenSpeed = 14.0f;  // opening rate (0..1 per second)
+inline constexpr float kMouthCloseSpeed = 30.0f; // closing rate (0..1 per second)
+inline constexpr float kMouthCloseBiteTime = 0.12f; // fast snap shut after a bite
+inline constexpr float kMouthLockTime = 0.2f;    // pause before the mouth may open again
+inline constexpr float kMouthBiteIdle = -1.0f;
+inline constexpr float kMouthMaxAngle = 0.8726646f; // 50 degrees for the lower jaw
+inline constexpr float kMouthSnoutLift = 0.1396263f; // 8 degrees for the snout
+inline constexpr float kMouthJawLength = 0.55f;
+inline constexpr float kMouthHingeBack = 0.05f;
+inline constexpr float kMouthHingeDown = 0.22f;
+inline constexpr float kMouthLunge = 0.1f;       // head thrust on the bite
+inline constexpr float kMouthBitePulse = 0.18f;  // seconds of the bite head pulse
+inline constexpr Color kMouthInner{110, 32, 38, 255};
+inline constexpr Color kMouthTeeth{246, 248, 252, 255};
+
 // Palette
 inline const Color kBg{14, 14, 20, 255};
 inline const Color kHudBg{26, 28, 38, 255};

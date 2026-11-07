@@ -4,6 +4,7 @@
 #include "game/settings.hpp"
 #include "game/skins.hpp"
 
+#include <cstddef>
 #include <deque>
 #include <random>
 #include <string>
@@ -44,6 +45,23 @@ struct GhostHead {
     Dir dir = Dir::Right;
     float life = 0.0f;
     float maxLife = 0.0f;
+};
+
+// A rival snake controlled by the AI module (src/game/ai_snake.cpp).
+struct AiSnake {
+    std::deque<Cell> body;     // front == head
+    std::deque<Cell> prevBody; // for render interpolation
+    Dir dir = Dir::Left;
+    float spawnT = 0.0f; // 0..1 pop-in
+    float deathT = 0.0f; // 0..1 fade-out while dying
+    bool dying = false;
+};
+
+// Telegraphs an AI spawn so the player gets a warning marker first.
+struct AiSpawnWarning {
+    Cell cell;
+    float timer = 1.2f;
+    size_t length = 3;
 };
 
 // Sparks/bursts live in arena world space (1 unit == 1 cell).
@@ -108,6 +126,9 @@ struct Game {
     std::vector<GhostHead> ghosts;
     std::vector<WorldParticle> particles;
     std::vector<Particle> ambientParticles;
+    std::vector<AiSnake> ai;
+    std::vector<AiSpawnWarning> aiWarnings;
+    float aiSpawnTimer = 12.0f;
     std::vector<FloatingText> floatingTexts;
     float shakeTimer = 0.0f;
     float shakeIntensity = 0.0f;

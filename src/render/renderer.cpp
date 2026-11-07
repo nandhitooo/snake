@@ -273,6 +273,68 @@ void drawParticles3D(const Game& g) {
     }
 }
 
+Vector3 aiSegmentWorld(const AiSnake& ai, size_t i, float y, float alpha) {
+    if (i >= ai.body.size()) {
+        return Vector3{0.0f, y, 0.0f};
+    }
+    Vector3 cur = cellToWorld(ai.body[i], y);
+    if (ai.prevBody.size() == ai.body.size() && i < ai.prevBody.size() && alpha > 0.0f) {
+        const Vector3 prev = cellToWorld(ai.prevBody[i], y);
+        if (std::fabs(cur.x - prev.x) <= 1.01f && std::fabs(cur.z - prev.z) <= 1.01f) {
+            cur.x = prev.x + (cur.x - prev.x) * alpha;
+            cur.z = prev.z + (cur.z - prev.z) * alpha;
+        }
+    }
+    return cur;
+}
+
+void drawAiWarnings(const Game& g) {
+    for (const AiSpawnWarning& w : g.aiWarnings) {
+        const Vector3 base = cellToWorld(w.cell, 0.0f);
+        const float blink = 0.5f + 0.5f * std::sin(g.animTime * 11.0f);
+        DrawPlane(Vector3{base.x, 0.02f, base.z}, Vector2{0.9f, 0.9f},
+                  Color{150, 95, 225, static_cast<unsigned char>(45.0f + 110.0f * blink)});
+        DrawCubeWiresV(Vector3{base.x, 0.35f, base.z}, Vector3{0.7f, 0.7f, 0.7f},
+                       Color{190, 140, 255, static_cast<unsigned char>(150.0f + 100.0f * blink)});
+    }
+}
+
+// Rivals are violet; a green wireframe means the player can eat them, red means
+// touching them is fatal. The hint is recomputed every frame from both lengths.
+void drawAiSnakes(const Game& g) {
+    const Color rivalBody{150, 95, 225, 255};
+    const Color rivalTail{70, 40, 120, 255};
+
+    for (const AiSnake& ai : g.ai) {
+        if (ai.body.empty()) {
+            continue;
+        }
+        const float appear = g.animations ? std::clamp(ai.spawnT, 0.0f, 1.0f) : 1.0f;
+        const float fade = ai.dying ? std::clamp(ai.deathT / 0.35f, 0.0f, 1.0f) : 1.0f;
+        const float scale = std::max(0.05f, appear * fade);
+        const bool edible = ai.body.size() < g.snake.size();
+        const Color hint = edible ? Color{110, 240, 140, 225} : Color{245, 90, 90, 225};
+        const size_t n = ai.body.size();
+
+        for (size_t i = n; i-- > 0;) {
+            const float wave =
+                g.animations ? 0.04f * std::sin(g.animTime * 5.0f - static_cast<float>(i) * 0.5f)
+                             : 0.0f;
+            const Vector3 p = aiSegmentWorld(ai, i, 0.42f + wave, g.tickAlpha);
+            const float t = (n > 1) ? static_cast<float>(i) / static_cast<float>(n - 1) : 0.0f;
+            const Color col = render::lerpColor(rivalBody, rivalTail, t);
+
+            if (i == 0) {
+                DrawSphereEx(Vector3{p.x, p.y + 0.05f, p.z}, 0.44f * scale, 8, 10, rivalBody);
+                DrawSphereWires(Vector3{p.x, p.y + 0.05f, p.z}, 0.47f * scale, 6, 8, hint);
+            } else {
+                DrawCubeV(p, Vector3{0.74f * scale, 0.6f * scale, 0.74f * scale}, col);
+                DrawCubeWiresV(p, Vector3{0.78f * scale, 0.64f * scale, 0.78f * scale}, hint);
+            }
+        }
+    }
+}
+
 } // namespace
 
 // 3D head: sphere, two eyes looking forward and an animated forked tongue.
@@ -375,8 +437,10 @@ void Game::draw() const {
     BeginMode3D(cam);
     drawArenaFloor();
     drawWarnings(*this);
+    drawAiWarnings(*this);
     drawObstacles(*this);
     drawGhosts(*this);
+    drawAiSnakes(*this);
     drawApple(*this);
     if (hasSpecial) {
         drawSpecialFood(*this);

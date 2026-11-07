@@ -1,4 +1,5 @@
 #include "game/game.hpp"
+#include "game/ai_snake.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -66,6 +67,7 @@ void Game::reset() {
     ghosts.clear();
     particles.clear();
     floatingTexts.clear();
+    resetAi(*this);
     shakeTimer = 0.0f;
     shakeIntensity = 0.0f;
     isNewHighRecord = false;
@@ -143,7 +145,20 @@ bool Game::isEmpty(const Cell& c) const {
     if (hasSpecial && c == specialFood) {
         return false;
     }
-    return !(c == food) && !isSnake(c) && !isSolid(c) && !isWarning(c);
+    if (!(c == food) && !isSnake(c) && !isSolid(c) && !isWarning(c)) {
+        for (const AiSnake& rival : ai) {
+            if (rival.dying) {
+                continue;
+            }
+            for (const Cell& segment : rival.body) {
+                if (segment == c) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    return false;
 }
 
 void Game::spawnFood() {
@@ -427,6 +442,11 @@ void Game::update() {
         ghosts.push_back(GhostHead{head, dir, kGhostLife, kGhostLife});
     }
 
+    // Length decides who wins: a shorter AI is eaten, an equal/longer one kills.
+    if (resolvePlayerAiCollision(*this, head)) {
+        return;
+    }
+
     const bool eats = (head == food);
     const bool eatsSpecial = hasSpecial && (head == specialFood);
     if (checkCollision(head, !eats && !eatsSpecial)) {
@@ -462,6 +482,8 @@ void Game::update() {
     } else {
         snake.pop_back();
     }
+
+    updateAiTick(*this);
 }
 
 void Game::initAmbientParticles() {
@@ -691,6 +713,7 @@ void Game::stepFrame(float dt) {
     }
 
     updateObstacles(dt);
+    updateAiSpawner(*this, dt);
 
     accumulator += dt;
     int guard = 0;

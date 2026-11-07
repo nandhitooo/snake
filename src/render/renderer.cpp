@@ -388,6 +388,12 @@ void Game::drawGhostHead(const GhostHead& g) const {
 }
 
 void Game::draw() const {
+    // Clear color AND depth. Drawing a full-screen background does not touch the
+    // depth buffer, and the canvas render target's depth is undefined, so without
+    // this every 3D fragment fails the depth test and the whole arena/snake
+    // silently disappears (2D HUD still draws, which hides the cause).
+    ClearBackground(kBg);
+
     // Backdrop for the whole virtual canvas.
     DrawRectangleGradientV(0, 0, kWinW, kWinH, Color{13, 15, 22, 255}, Color{8, 9, 13, 255});
     for (const Particle& p : ambientParticles) {

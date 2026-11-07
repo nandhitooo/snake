@@ -1,6 +1,9 @@
 #include "game/game.hpp"
 #include "render/color.hpp"
+#include "render/snake_head.hpp"
 #include "ui/layout.hpp"
+
+#include "rlgl.h"
 
 #include <algorithm>
 #include <cmath>
@@ -169,68 +172,181 @@ void drawObstacles(const Game& g) {
     }
 }
 
-// Jaw, teeth and mouth interior for the head. Primitive-only (no rlgl, no
-// assets): nine draw calls, and nothing at all while the mouth is shut.
-void drawMouth(const Game& g, const Vector3& headCenter) {
-    const float open = std::clamp(g.mouthOpen, 0.0f, 1.0f);
-    if (!g.animations || open <= 0.01f) {
+// --- Shared snake head ----------------------------------------------------
+//
+// The in-game snake and the skins-preview turntable both render through
+// drawSnakeHead(), so the skull, mouth, eyes and crown exist in one place only.
+// Every size below is expressed at kHeadRefRadius and scaled by `s`.
+
+// Jaw, teeth, throat and tongue. Primitive-only (no assets) and nothing at all
+// while the mouth is shut.
+void drawMouthGeometry(const HeadPose& p, float headRadius) {
+    const float open = std::clamp(p.mouthOpen, 0.0f, 1.0f);
+    if (!p.animate || open <= 0.01f) {
         return;
     }
-    const Vector3 fwd = dirToWorld(g.dir);
+    const float s = headRadius / kHeadRefRadius;
+    const Vector3 fwd = p.fwd;
     const Vector3 right{-fwd.z, 0.0f, fwd.x};
     const Vector3 up{0.0f, 1.0f, 0.0f};
+    const Vector3 head = p.pos;
 
-    // Bite lunge: the head thrusts forward and settles back within a fraction of a second.
-    float lunge = 0.0f;
-    if (g.biteT >= 0.0f && g.biteT < kMouthBitePulse) {
-        lunge = std::sin(g.biteT / kMouthBitePulse * 3.141593f) * kMouthLunge;
-    }
-    const Vector3 head = vadd(headCenter, vmul(fwd, lunge));
     const float angle = kMouthMaxAngle * open;
     const float ca = std::cos(angle);
     const float sa = std::sin(angle);
-    const Color jaw = render::tint(g.headColor(), 0.78f);
+    const Color jaw = render::tint(p.head, 0.78f);
 
     // Throat: dark red, visible only through the open jaw.
-    const Vector3 inner = vadd(head, vadd(vmul(fwd, 0.16f), Vector3{0.0f, -0.06f, 0.0f}));
-    DrawSphereEx(inner, 0.24f * open + 0.05f, 8, 10, kMouthInner);
+    const Vector3 inner =
+        vadd(head, vadd(vmul(fwd, 0.16f * s), Vector3{0.0f, -0.06f * s, 0.0f}));
+    DrawSphereEx(inner, (0.24f * open + 0.05f) * s, 8, 10, kMouthInner);
 
     // Lower jaw hinges behind and below the head, then rotates down by `angle`.
-    const Vector3 hinge = vadd(
-        head, vadd(vmul(fwd, -kMouthHingeBack), Vector3{0.0f, -kMouthHingeDown, 0.0f}));
+    const Vector3 hinge =
+        vadd(head, vadd(vmul(fwd, -kMouthHingeBack * s), Vector3{0.0f, -kMouthHingeDown * s, 0.0f}));
     const Vector3 jawDir = vadd(vmul(fwd, ca), vmul(up, -sa));
-    const Vector3 jawEnd = vadd(hinge, vmul(jawDir, kMouthJawLength));
-    DrawCylinderEx(hinge, jawEnd, 0.17f, 0.09f, 6, jaw);
-    DrawSphereEx(jawEnd, 0.09f, 6, 8, jaw);
+    const Vector3 jawEnd = vadd(hinge, vmul(jawDir, kMouthJawLength * s));
+    DrawCylinderEx(hinge, jawEnd, 0.17f * s, 0.09f * s, 6, jaw);
+    DrawSphereEx(jawEnd, 0.09f * s, 6, 8, jaw);
 
     // Snout: the upper jaw lifts a little, so the open mouth reads as a yawn.
     const float lift = kMouthSnoutLift * open;
-    const Vector3 snoutRoot = vadd(head, vadd(vmul(fwd, 0.1f), Vector3{0.0f, -0.06f, 0.0f}));
+    const Vector3 snoutRoot =
+        vadd(head, vadd(vmul(fwd, 0.1f * s), Vector3{0.0f, -0.06f * s, 0.0f}));
     const Vector3 snoutDir = vadd(vmul(fwd, std::cos(lift)), vmul(up, std::sin(lift)));
-    const Vector3 snoutEnd = vadd(snoutRoot, vmul(snoutDir, 0.36f));
-    DrawCylinderEx(snoutRoot, snoutEnd, 0.16f, 0.09f, 6, render::tint(g.headColor(), 0.92f));
+    const Vector3 snoutEnd = vadd(snoutRoot, vmul(snoutDir, 0.36f * s));
+    DrawCylinderEx(snoutRoot, snoutEnd, 0.16f * s, 0.09f * s, 6, render::tint(p.head, 0.92f));
 
     // Four fangs (two upper, two lower), scaled in as the jaw opens.
     const float tooth = std::min(1.0f, open * 1.6f);
     const Vector3 jawUp = vadd(vmul(up, ca), vmul(fwd, sa));
     for (int side = -1; side <= 1; side += 2) {
-        const Vector3 upperBase = vadd(vadd(snoutEnd, vmul(right, 0.08f * static_cast<float>(side))),
-                                       vmul(up, -0.02f));
+        const Vector3 upperBase =
+            vadd(vadd(snoutEnd, vmul(right, 0.08f * s * static_cast<float>(side))),
+                 vmul(up, -0.02f * s));
         const Vector3 upperTip =
-            vadd(upperBase, vadd(vmul(up, -0.15f * tooth), vmul(fwd, 0.03f)));
-        DrawCylinderEx(upperBase, upperTip, 0.042f, 0.0f, 5, kMouthTeeth);
+            vadd(upperBase, vadd(vmul(up, -0.15f * s * tooth), vmul(fwd, 0.03f * s)));
+        DrawCylinderEx(upperBase, upperTip, 0.042f * s, 0.0f, 5, kMouthTeeth);
 
         const Vector3 lowerBase =
-            vadd(vadd(hinge, vmul(jawDir, 0.4f)), vmul(right, 0.09f * static_cast<float>(side)));
-        const Vector3 lowerTip = vadd(lowerBase, vmul(jawUp, 0.14f * tooth));
-        DrawCylinderEx(lowerBase, lowerTip, 0.04f, 0.0f, 5, kMouthTeeth);
+            vadd(vadd(hinge, vmul(jawDir, 0.4f * s)), vmul(right, 0.09f * s * static_cast<float>(side)));
+        const Vector3 lowerTip = vadd(lowerBase, vmul(jawUp, 0.14f * s * tooth));
+        DrawCylinderEx(lowerBase, lowerTip, 0.04f * s, 0.0f, 5, kMouthTeeth);
     }
 
     // A small tongue inside the open mouth (the idle flick is hidden meanwhile).
     if (open > 0.2f) {
-        const Vector3 tBase = vadd(inner, vmul(fwd, 0.04f));
-        const Vector3 tTip = vadd(tBase, vadd(vmul(fwd, 0.24f * open), vmul(jawDir, 0.08f)));
-        DrawCylinderEx(tBase, tTip, 0.05f, 0.025f, 5, Color{214, 62, 84, 255});
+        const Vector3 tBase = vadd(inner, vmul(fwd, 0.04f * s));
+        const Vector3 tTip =
+            vadd(tBase, vadd(vmul(fwd, 0.24f * s * open), vmul(jawDir, 0.08f * s)));
+        DrawCylinderEx(tBase, tTip, 0.05f * s, 0.025f * s, 5, Color{214, 62, 84, 255});
+    }
+}
+
+// The idle forked tongue flick.
+void drawHeadTongue(const HeadPose& p, float s) {
+    if (!p.animate || p.mouthOpen > 0.2f) {
+        return;
+    }
+    const float cycle = std::fmod(p.time, 2.4f);
+    if (cycle >= 0.35f) {
+        return;
+    }
+    const Vector3 fwd = p.fwd;
+    const Vector3 right{-fwd.z, 0.0f, fwd.x};
+    const float ext = (cycle < 0.17f) ? (cycle / 0.17f) : ((0.35f - cycle) / 0.18f);
+    const Vector3 base =
+        vadd(p.pos, vadd(vmul(fwd, 0.44f * s), Vector3{0.0f, -0.12f * s, 0.0f}));
+    const Vector3 tip = vadd(base, vmul(fwd, 0.34f * s * ext));
+    const Color tongue{230, 60, 85, 255};
+    DrawCylinderEx(base, tip, 0.035f * s, 0.028f * s, 5, tongue);
+    const Vector3 forkA = vadd(tip, vmul(vadd(fwd, right), 0.1f * s));
+    const Vector3 forkB = vadd(tip, vmul(vadd(fwd, vmul(right, -1.0f)), 0.1f * s));
+    DrawCylinderEx(tip, forkA, 0.025f * s, 0.018f * s, 4, tongue);
+    DrawCylinderEx(tip, forkB, 0.025f * s, 0.018f * s, 4, tongue);
+}
+
+// Eyes: white, pupil, glint. Blink squashes them vertically around the eye
+// centre with an rlgl matrix; happy eyes become "^ ^" strokes instead.
+void drawHeadEyes(const HeadPose& p, float headRadius) {
+    const float s = headRadius / kHeadRefRadius;
+    const Vector3 fwd = p.fwd;
+    const Vector3 right{-fwd.z, 0.0f, fwd.x};
+    const Vector3 up{0.0f, 1.0f, 0.0f};
+    const Color white{242, 246, 252, 255};
+    const float blink = std::clamp(p.blink, 0.0f, 1.0f);
+    const float squash = 1.0f - 0.9f * blink;
+    const float grow = 1.0f + kHeadEyePupilGrow * std::clamp(p.mouthOpen, 0.0f, 1.0f);
+
+    for (int side = -1; side <= 1; side += 2) {
+        const Vector3 eye =
+            vadd(p.pos, vadd(vmul(fwd, kHeadEyeFwd * s),
+                             vadd(vmul(right, kHeadEyeSpread * s * static_cast<float>(side)),
+                                  vmul(up, kHeadEyeHeight * s))));
+
+        if (p.happy) {
+            const float half = kHeadEyeWhite * s * 0.75f;
+            const Vector3 a = vadd(eye, vmul(right, -half));
+            const Vector3 b = vadd(eye, vmul(up, half * 0.9f));
+            const Vector3 c = vadd(eye, vmul(right, half));
+            DrawCylinderEx(a, b, kHeadEyeHappyThick * s, kHeadEyeHappyThick * s, 5, p.eye);
+            DrawCylinderEx(b, c, kHeadEyeHappyThick * s, kHeadEyeHappyThick * s, 5, p.eye);
+            continue;
+        }
+
+        const Vector3 look = vadd(vmul(right, p.gazeRight * kHeadPupilShift * s),
+                                  vmul(fwd, p.gazeFwd * kHeadPupilShift * s));
+        rlPushMatrix();
+        rlTranslatef(eye.x, eye.y, eye.z);
+        rlScalef(1.0f, squash, 1.0f);
+        DrawSphereEx(Vector3{0.0f, 0.0f, 0.0f}, kHeadEyeWhite * s, 6, 8, white);
+        const Vector3 pupil = vadd(vmul(fwd, kHeadEyePupilFwd * s), look);
+        DrawSphereEx(pupil, kHeadEyePupil * s * grow, 6, 8, p.eye);
+        if (kHeadEyeShine > 0.0f) {
+            const Vector3 shine = vadd(pupil, vadd(vmul(right, kHeadEyeShineOffset * s),
+                                                   vmul(up, kHeadEyeShineOffset * s)));
+            DrawSphereEx(shine, kHeadEyeShine * s * grow, 5, 6, WHITE);
+        }
+        rlPopMatrix();
+
+        // A closed eye still needs a crisp lash line once it is nearly shut.
+        if (blink > 0.7f) {
+            const Vector3 a = vadd(eye, vmul(right, -kHeadBlinkLine * s));
+            const Vector3 b = vadd(eye, vmul(right, kHeadBlinkLine * s));
+            DrawCylinderEx(a, b, kHeadBlinkThick * s, kHeadBlinkThick * s, 5, p.eye);
+        }
+    }
+}
+
+// Gold-royal crown, sitting on top of the (possibly larger) skull.
+void drawHeadCrown(const HeadPose& p, float headRadius) {
+    const float s = headRadius / kHeadRefRadius;
+    const Vector3 base{p.pos.x, p.pos.y + 0.5f * s, p.pos.z};
+    DrawCubeV(base, Vector3{0.36f * s, 0.06f * s, 0.36f * s}, kGold);
+    DrawCubeV(Vector3{base.x - 0.12f * s, base.y + 0.1f * s, base.z},
+              Vector3{0.07f * s, 0.18f * s, 0.07f * s}, kGold);
+    DrawCubeV(Vector3{base.x, base.y + 0.13f * s, base.z},
+              Vector3{0.07f * s, 0.24f * s, 0.07f * s}, kGold);
+    DrawCubeV(Vector3{base.x + 0.12f * s, base.y + 0.1f * s, base.z},
+              Vector3{0.07f * s, 0.18f * s, 0.07f * s}, kGold);
+}
+
+void drawSnakeHeadBody(const HeadPose& p) {
+    const float radius = kHeadRadius * p.scale;
+    // Bite pulse: the skull throbs briefly as the jaw snaps shut.
+    float pulse = 1.0f;
+    if (p.animate && p.biteT >= 0.0f && p.biteT < kMouthBitePulse) {
+        pulse = 1.0f + kHeadBitePulseScale *
+                           std::sin(p.biteT / kMouthBitePulse * 3.141593f);
+    }
+    const float headRadius = radius * pulse;
+
+    DrawSphereEx(p.pos, headRadius, 10, 12, p.head);
+    drawMouthGeometry(p, headRadius);
+    drawHeadEyes(p, headRadius);
+    drawHeadTongue(p, headRadius / kHeadRefRadius);
+    if (p.crown) {
+        drawHeadCrown(p, headRadius);
     }
 }
 
@@ -310,19 +426,18 @@ void drawSnakeBody(const Game& g) {
             // Head bobs and leans a little as it moves.
             const float sway = anim ? 0.05f * std::sin(g.animTime * 2.2f) : 0.0f;
             const Vector3 head{p.x + sway, p.y + 0.1f + bob, p.z};
-            DrawSphereEx(head, 0.5f * bump, 10, 12, g.headColor());
-            drawMouth(g, head);
-
-            if (sk.crown) {
-                const Vector3 base{head.x, head.y + 0.5f, head.z};
-                DrawCubeV(base, Vector3{0.36f, 0.06f, 0.36f}, kGold);
-                DrawCubeV(Vector3{base.x - 0.12f, base.y + 0.1f, base.z},
-                          Vector3{0.07f, 0.18f, 0.07f}, kGold);
-                DrawCubeV(Vector3{base.x, base.y + 0.13f, base.z},
-                          Vector3{0.07f, 0.24f, 0.07f}, kGold);
-                DrawCubeV(Vector3{base.x + 0.12f, base.y + 0.1f, base.z},
-                          Vector3{0.07f, 0.18f, 0.07f}, kGold);
-            }
+            HeadPose pose;
+            pose.pos = head;
+            pose.fwd = dirToWorld(g.dir);
+            pose.scale = bump;
+            pose.time = g.animTime;
+            pose.mouthOpen = g.mouthOpen;
+            pose.biteT = g.biteT;
+            pose.animate = anim;
+            pose.head = g.headColor();
+            pose.eye = g.eyeColor();
+            pose.crown = sk.crown;
+            drawSnakeHeadBody(pose);
         } else if (i == n - 1 && n > 2) {
             DrawSphereEx(p, 0.34f * bump, 8, 10, col);
         } else if (sk.shape == SegmentShape::Sphere) {
@@ -415,38 +530,8 @@ void drawAiSnakes(const Game& g) {
 
 } // namespace
 
-// 3D head: sphere, two eyes looking forward and an animated forked tongue.
-void Game::drawEyes() const {
-    if (snake.empty()) {
-        return;
-    }
-    const Vector3 head = segmentWorld(*this, 0, 0.55f);
-    const Vector3 fwd = dirToWorld(dir);
-    const Vector3 right{-fwd.z, 0.0f, fwd.x};
-    const Color white{242, 246, 252, 255};
-
-    for (int side = -1; side <= 1; side += 2) {
-        const Vector3 eye = vadd(vadd(head, vmul(fwd, 0.32f)),
-                                 vadd(vmul(right, 0.2f * static_cast<float>(side)),
-                                      Vector3{0.0f, 0.17f, 0.0f}));
-        DrawSphereEx(eye, 0.12f, 6, 8, white);
-        DrawSphereEx(vadd(eye, vmul(fwd, 0.07f)), 0.055f, 6, 8, eyeColor());
-    }
-
-    const float cycle = std::fmod(animTime, 2.4f);
-    // The idle tongue flick would poke through an open jaw: hide it then.
-    if (cycle < 0.35f && mouthOpen <= 0.2f) {
-        const float ext = (cycle < 0.17f) ? (cycle / 0.17f) : ((0.35f - cycle) / 0.18f);
-        const Vector3 base = vadd(vadd(head, vmul(fwd, 0.44f)), Vector3{0.0f, -0.12f, 0.0f});
-        const Vector3 tip = vadd(base, vmul(fwd, 0.34f * ext));
-        const Color tongue{230, 60, 85, 255};
-        DrawCylinderEx(base, tip, 0.035f, 0.028f, 5, tongue);
-        const Vector3 forkA = vadd(tip, vmul(vadd(fwd, right), 0.1f));
-        const Vector3 forkB = vadd(tip, vmul(vadd(fwd, vmul(right, -1.0f)), 0.1f));
-        DrawCylinderEx(tip, forkA, 0.025f, 0.018f, 4, tongue);
-        DrawCylinderEx(tip, forkB, 0.025f, 0.018f, 4, tongue);
-    }
-}
+// Public entry point: the gameplay snake and the skins preview both call this.
+void drawSnakeHead(const HeadPose& pose) { drawSnakeHeadBody(pose); }
 
 void Game::drawGhostHead(const GhostHead& g) const {
     const float fade = (g.maxLife > 0.0f) ? (g.life / g.maxLife) : 0.0f;
@@ -540,7 +625,6 @@ void Game::draw() const {
     // With animation on, the body is gone on game over: it burst into shards.
     if (!(over && animations)) {
         drawSnakeBody(*this);
-        drawEyes();
     }
     drawParticles3D(*this);
     EndMode3D();

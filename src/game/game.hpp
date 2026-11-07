@@ -261,7 +261,6 @@ struct Game {
     Color snakeColorAt(size_t index, size_t count) const;
     Color eyeColor() const;
 
-    void drawEyes() const;
     void drawGhostHead(const GhostHead& g) const;
     void drawButton(const Rectangle& r, const char* label, bool enabled, bool active,
                     bool hovered) const;

@@ -83,6 +83,25 @@ inline constexpr float kMouthBitePulse = 0.18f;  // seconds of the bite head pul
 inline constexpr Color kMouthInner{110, 32, 38, 255};
 inline constexpr Color kMouthTeeth{246, 248, 252, 255};
 
+// Snake head design (Phase C). Mouth/jaw offsets are authored at kHeadRefRadius
+// and scaled from there, so changing the skull size keeps the face attached.
+inline constexpr float kHeadRadius = 0.5f;
+inline constexpr float kHeadRefRadius = 0.5f;
+inline constexpr float kHeadEyeFwd = 0.32f;     // eye centre, forward offset
+inline constexpr float kHeadEyeSpread = 0.2f;   // eye centre, lateral offset
+inline constexpr float kHeadEyeHeight = 0.17f;  // eye centre, height offset
+inline constexpr float kHeadEyeWhite = 0.12f;
+inline constexpr float kHeadEyePupil = 0.055f;
+inline constexpr float kHeadEyePupilFwd = 0.07f;
+inline constexpr float kHeadEyeShine = 0.0f;    // highlight radius (0 disables)
+inline constexpr float kHeadEyeShineOffset = 0.035f;
+inline constexpr float kHeadEyePupilGrow = 0.0f; // pupil growth per unit of mouthOpen
+inline constexpr float kHeadPupilShift = 0.0f;   // max gaze offset
+inline constexpr float kHeadBlinkLine = 0.11f;   // half length of the closed-eye line
+inline constexpr float kHeadBlinkThick = 0.018f;
+inline constexpr float kHeadEyeHappyThick = 0.02f;
+inline constexpr float kHeadBitePulseScale = 0.0f;
+
 // Palette
 inline const Color kBg{14, 14, 20, 255};
 inline const Color kHudBg{26, 28, 38, 255};

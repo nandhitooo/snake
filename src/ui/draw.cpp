@@ -1,5 +1,6 @@
 #include "game/game.hpp"
 #include "render/color.hpp"
+#include "render/snake_head.hpp"
 #include "ui/layout.hpp"
 
 #include <cmath>
@@ -494,27 +495,16 @@ void Game::drawSkins() const {
         }
 
         if (i + 1 == previewCount) {
-            DrawSphereEx(p, 0.52f, 10, 12, headColor());
-            const Vector3 fwd{-std::sin(a), 0.0f, std::cos(a)};
-            const Vector3 right{-fwd.z, 0.0f, fwd.x};
-            for (int side = -1; side <= 1; side += 2) {
-                const Vector3 eye{p.x + fwd.x * 0.3f + right.x * 0.2f * static_cast<float>(side),
-                                  p.y + 0.18f,
-                                  p.z + fwd.z * 0.3f + right.z * 0.2f * static_cast<float>(side)};
-                DrawSphereEx(eye, 0.11f, 6, 8, Color{242, 246, 252, 255});
-                DrawSphereEx(Vector3{eye.x + fwd.x * 0.07f, eye.y, eye.z + fwd.z * 0.07f}, 0.05f, 5,
-                             6, eyeColor());
-            }
-            if (sk.crown) {
-                const Vector3 base{p.x, p.y + 0.5f, p.z};
-                DrawCubeV(base, Vector3{0.36f, 0.06f, 0.36f}, kGold);
-                DrawCubeV(Vector3{base.x - 0.12f, base.y + 0.1f, base.z},
-                          Vector3{0.07f, 0.18f, 0.07f}, kGold);
-                DrawCubeV(Vector3{base.x, base.y + 0.13f, base.z},
-                          Vector3{0.07f, 0.24f, 0.07f}, kGold);
-                DrawCubeV(Vector3{base.x + 0.12f, base.y + 0.1f, base.z},
-                          Vector3{0.07f, 0.18f, 0.07f}, kGold);
-            }
+            // Same shared head as gameplay so every skin is previewed honestly.
+            HeadPose pose;
+            pose.pos = p;
+            pose.fwd = Vector3{-std::sin(a), 0.0f, std::cos(a)};
+            pose.time = animTime;
+            pose.animate = animations;
+            pose.head = headColor();
+            pose.eye = eyeColor();
+            pose.crown = sk.crown;
+            drawSnakeHead(pose);
         } else if (sk.shape == SegmentShape::Sphere) {
             DrawSphereEx(p, 0.42f, 8, 10, col);
         } else {

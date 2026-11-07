@@ -48,6 +48,12 @@ inline Rectangle settingsRowRect(int index) {
 }
 inline Rectangle settingsBackRect() { return Rectangle{380.0f, 452.0f, 200.0f, 40.0f}; }
 
+// Skins screen: six cards in a row plus a back button.
+inline Rectangle skinCardRect(int index) {
+    return Rectangle{66.0f + static_cast<float>(index) * 140.0f, 348.0f, 128.0f, 74.0f};
+}
+inline Rectangle skinsBackRect() { return Rectangle{400.0f, 442.0f, 160.0f, 38.0f}; }
+
 // Pause card (shared by renderer and input so hit boxes match the drawing).
 inline Rectangle pauseCardRect() {
     return Rectangle{static_cast<float>(kArenaX + (kArenaW - 320) / 2),

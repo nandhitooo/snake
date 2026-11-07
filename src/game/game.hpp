@@ -2,6 +2,7 @@
 
 #include "game/config.hpp"
 #include "game/settings.hpp"
+#include "game/skins.hpp"
 
 #include <deque>
 #include <random>
@@ -138,6 +139,7 @@ struct Game {
     float specialAge = 0.0f;    // seconds since the current special food spawned
     float overFade = 0.0f;      // 0..1 fade-in of the game-over overlay
     float transitionT = 0.0f;   // 0..1 full-screen fade after a mode change
+    float trailTimer = 0.0f;    // throttle for skin trail particles
     bool quit = false;
     Mode mode = Mode::Menu;
     bool fsRequest = false;
@@ -198,7 +200,8 @@ struct Game {
     void applyWindowSettings();
     void persistSettings();
 
-    // Skin hooks: Phase 2 uses the classic palette, Phase 5 makes these skin-aware.
+    // Skin palette (selected from the Skins screen, persisted in settings.cfg).
+    const SkinDef& skin() const;
     Color headColor() const;
     Color snakeColorAt(size_t index, size_t count) const;
     Color eyeColor() const;
@@ -209,6 +212,7 @@ struct Game {
                     bool hovered) const;
     void drawMenu() const;
     void drawSettings() const;
+    void drawSkins() const;
     void draw() const;
 };
 

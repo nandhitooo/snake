@@ -55,28 +55,30 @@ Settings loadSettings(const std::string& path) {
             continue;
         }
         const std::string key = trim(text.substr(0, eq));
-        const int value = readInt(trim(text.substr(eq + 1)), 0);
+        const std::string raw = trim(text.substr(eq + 1));
 
+        // A malformed number keeps the field's current value (its default), so a
+        // corrupt settings.cfg degrades to sane options instead of resetting to 0.
         if (key == "resolution") {
-            s.resolution = clampInt(value, 0, kResolutionCount - 1);
+            s.resolution = clampInt(readInt(raw, s.resolution), 0, kResolutionCount - 1);
         } else if (key == "fullscreen") {
-            s.fullscreen = clampInt(value, 0, 1);
+            s.fullscreen = clampInt(readInt(raw, s.fullscreen), 0, 1);
         } else if (key == "vsync") {
-            s.vsync = clampInt(value, 0, 1);
+            s.vsync = clampInt(readInt(raw, s.vsync), 0, 1);
         } else if (key == "fps") {
-            s.fpsLimit = clampInt(value, 0, 3);
+            s.fpsLimit = clampInt(readInt(raw, s.fpsLimit), 0, 3);
         } else if (key == "speed") {
-            s.speed = clampInt(value, 0, 2);
+            s.speed = clampInt(readInt(raw, s.speed), 0, 2);
         } else if (key == "camera") {
-            s.camera = clampInt(value, 0, 2);
+            s.camera = clampInt(readInt(raw, s.camera), 0, 2);
         } else if (key == "animations") {
-            s.animations = clampInt(value, 0, 1);
+            s.animations = clampInt(readInt(raw, s.animations), 0, 1);
         } else if (key == "particles") {
-            s.particles = clampInt(value, 0, 2);
+            s.particles = clampInt(readInt(raw, s.particles), 0, 2);
         } else if (key == "shake") {
-            s.shake = clampInt(value, 0, 1);
+            s.shake = clampInt(readInt(raw, s.shake), 0, 1);
         } else if (key == "skin") {
-            s.skin = clampInt(value, 0, 5);
+            s.skin = clampInt(readInt(raw, s.skin), 0, 5);
         }
     }
     return s;

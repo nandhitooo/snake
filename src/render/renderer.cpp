@@ -189,6 +189,8 @@ void drawSnakeBody(const Game& g) {
     }
     const bool anim = g.animations;
     const float baseY = 0.45f;
+    const SkinDef& sk = g.skin();
+    const bool glowSkin = (sk.trail == TrailKind::Glow);
 
     // Swallow ripple: a bump that travels head -> tail after eating.
     const auto swallowBump = [&](size_t i) {
@@ -223,13 +225,30 @@ void drawSnakeBody(const Game& g) {
         const Vector3 p = segmentWorld(g, i, baseY + wave);
         const Color col = g.snakeColorAt(i, n);
 
+        if (glowSkin) {
+            DrawSphereEx(p, 0.62f * bump, 6, 8, render::withAlpha(sk.accent, 36));
+        }
+
         if (i == 0) {
             // Head bobs and leans a little as it moves.
             const float sway = anim ? 0.05f * std::sin(g.animTime * 2.2f) : 0.0f;
-            DrawSphereEx(Vector3{p.x + sway, p.y + 0.1f + bob, p.z}, 0.5f * bump, 10, 12,
-                         g.headColor());
+            const Vector3 head{p.x + sway, p.y + 0.1f + bob, p.z};
+            DrawSphereEx(head, 0.5f * bump, 10, 12, g.headColor());
+
+            if (sk.crown) {
+                const Vector3 base{head.x, head.y + 0.5f, head.z};
+                DrawCubeV(base, Vector3{0.36f, 0.06f, 0.36f}, kGold);
+                DrawCubeV(Vector3{base.x - 0.12f, base.y + 0.1f, base.z},
+                          Vector3{0.07f, 0.18f, 0.07f}, kGold);
+                DrawCubeV(Vector3{base.x, base.y + 0.13f, base.z},
+                          Vector3{0.07f, 0.24f, 0.07f}, kGold);
+                DrawCubeV(Vector3{base.x + 0.12f, base.y + 0.1f, base.z},
+                          Vector3{0.07f, 0.18f, 0.07f}, kGold);
+            }
         } else if (i == n - 1 && n > 2) {
             DrawSphereEx(p, 0.34f * bump, 8, 10, col);
+        } else if (sk.shape == SegmentShape::Sphere) {
+            DrawSphereEx(p, 0.44f * bump, 8, 10, col);
         } else {
             DrawCubeV(p, Vector3{0.84f * bump, 0.7f * bump, 0.84f * bump}, col);
             DrawCubeV(Vector3{p.x, p.y - 0.2f, p.z},
@@ -315,6 +334,15 @@ void Game::draw() const {
 
     if (mode == Mode::Settings) {
         drawSettings();
+        if (transitionT > 0.0f) {
+            DrawRectangle(0, 0, kWinW, kWinH,
+                          Color{8, 9, 14, static_cast<unsigned char>(255.0f * transitionT)});
+        }
+        return;
+    }
+
+    if (mode == Mode::Skins) {
+        drawSkins();
         if (transitionT > 0.0f) {
             DrawRectangle(0, 0, kWinW, kWinH,
                           Color{8, 9, 14, static_cast<unsigned char>(255.0f * transitionT)});

@@ -1,6 +1,8 @@
 #include "game/game.hpp"
 #include "ui/layout.hpp"
 
+#include <algorithm>
+
 namespace snake {
 
 void Game::handleInput() {
@@ -54,6 +56,21 @@ void Game::handleInput() {
         return;
     }
     if (mode == Mode::Skins) {
+        int delta = 0;
+        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_UP)) {
+            delta = -1;
+        }
+        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_DOWN)) {
+            delta = 1;
+        }
+        if (delta != 0) {
+            settings.skin = std::clamp(settings.skin + delta, 0, kSkinCount - 1);
+            persistSettings();
+        }
+        if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) || IsKeyPressed(KEY_SPACE)) {
+            mode = Mode::Menu;
+            transitionT = animations ? 1.0f : 0.0f;
+        }
         return;
     }
     if (mode == Mode::Menu) {
@@ -151,6 +168,20 @@ void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
         return;
     }
     if (mode == Mode::Skins) {
+        if (pressed) {
+            if (CheckCollisionPointRec(mouse, ui::skinsBackRect())) {
+                mode = Mode::Menu;
+                transitionT = animations ? 1.0f : 0.0f;
+                return;
+            }
+            for (int i = 0; i < kSkinCount; ++i) {
+                if (CheckCollisionPointRec(mouse, ui::skinCardRect(i))) {
+                    settings.skin = i;
+                    persistSettings();
+                    return;
+                }
+            }
+        }
         return;
     }
 
@@ -158,6 +189,10 @@ void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
         if (pressed) {
             if (CheckCollisionPointRec(mouse, ui::menuPlayRect())) {
                 startGame();
+            } else if (CheckCollisionPointRec(mouse, ui::menuSkinsRect())) {
+                settingsReturn = Mode::Menu;
+                mode = Mode::Skins;
+                transitionT = animations ? 1.0f : 0.0f;
             } else if (CheckCollisionPointRec(mouse, ui::menuSettingsRect())) {
                 settingsReturn = Mode::Menu;
                 settingsIndex = 0;

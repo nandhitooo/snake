@@ -625,6 +625,30 @@ void Game::stepFrame(float dt) {
         transitionT = std::max(0.0f, transitionT - dt * 2.6f);
     }
 
+    // Optional per-skin trail (embers / sparkle / neon glow) from the tail.
+    trailTimer += dt;
+    const SkinDef& trailSkin = skin();
+    if (mode == Mode::Playing && !paused && !over && !snake.empty() &&
+        trailSkin.trail != TrailKind::None && trailTimer > 0.075f) {
+        trailTimer = 0.0f;
+        const Vector3 tailPos = cellToWorld(snake.back(), 0.3f);
+        switch (trailSkin.trail) {
+        case TrailKind::Embers:
+            spawnParticles(tailPos, Color{255, 140, 50, 210}, 1, 1.2f, 0.1f, 0.55f);
+            break;
+        case TrailKind::Sparkle:
+            spawnParticles(tailPos, Color{200, 235, 255, 200}, 1, 0.9f, 0.08f, 0.45f, false);
+            break;
+        case TrailKind::Glow:
+            spawnParticles(tailPos,
+                           Color{trailSkin.accent.r, trailSkin.accent.g, trailSkin.accent.b, 150},
+                           1, 0.6f, 0.09f, 0.35f, false);
+            break;
+        case TrailKind::None:
+            break;
+        }
+    }
+
     if (mode == Mode::Menu || paused) {
         return;
     }
@@ -735,18 +759,30 @@ void Game::updateCamera(float dt) {
     camera.projection = CAMERA_PERSPECTIVE;
 }
 
-Color Game::headColor() const { return kSnakeHead; }
+const SkinDef& Game::skin() const {
+    const int index = std::clamp(settings.skin, 0, kSkinCount - 1);
+    return kSkins[index];
+}
 
-Color Game::eyeColor() const { return kEye; }
+Color Game::headColor() const {
+    const SkinDef& s = skin();
+    return s.rainbow ? rainbowColor(animTime * 1.6f) : s.head;
+}
+
+Color Game::eyeColor() const { return skin().eye; }
 
 Color Game::snakeColorAt(size_t index, size_t count) const {
+    const SkinDef& s = skin();
+    if (s.rainbow) {
+        return rainbowColor(animTime * 1.6f + static_cast<float>(index) * 0.42f);
+    }
     const float t = (count > 1) ? static_cast<float>(index) / static_cast<float>(count - 1) : 0.0f;
     const auto mix = [](unsigned char a, unsigned char b, float k) {
         return static_cast<unsigned char>(static_cast<float>(a) +
                                           (static_cast<float>(b) - static_cast<float>(a)) * k);
     };
-    return Color{mix(kSnakeHead.r, kSnakeTail.r, t), mix(kSnakeHead.g, kSnakeTail.g, t),
-                 mix(kSnakeHead.b, kSnakeTail.b, t), 255};
+    return Color{mix(s.head.r, s.tail.r, t), mix(s.head.g, s.tail.g, t),
+                 mix(s.head.b, s.tail.b, t), 255};
 }
 
 void Game::applySettings() {

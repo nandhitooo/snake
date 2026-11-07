@@ -362,6 +362,8 @@ void Game::drawMenu() const {
     const bool fs = IsWindowFullscreen();
     drawButton(ui::menuPlayRect(), "PLAY", true, false,
                CheckCollisionPointRec(uiMouse, ui::menuPlayRect()));
+    drawButton(ui::menuSkinsRect(), "SKINS", true, false,
+               CheckCollisionPointRec(uiMouse, ui::menuSkinsRect()));
     drawButton(ui::menuSettingsRect(), "SETTINGS", true, false,
                CheckCollisionPointRec(uiMouse, ui::menuSettingsRect()));
     drawButton(ui::menuFullscreenRect(), fs ? "FULLSCREEN: ON" : "FULLSCREEN: OFF", true, fs,
@@ -446,6 +448,112 @@ void Game::drawSettings() const {
                CheckCollisionPointRec(uiMouse, ui::settingsBackRect()));
 
     const char* hint = "UP/DOWN select  |  LEFT/RIGHT change  |  ENTER cycle  |  ESC back";
+    constexpr int hintSize = 12;
+    const int hintW = MeasureText(hint, hintSize);
+    DrawText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});
+}
+
+void Game::drawSkins() const {
+    DrawRectangleGradientV(0, 0, kWinW, kWinH, Color{13, 16, 25, 255}, Color{8, 9, 14, 255});
+    for (const Particle& p : ambientParticles) {
+        DrawCircleV(p.pos, p.size, p.color);
+    }
+
+    const SkinDef& sk = skin();
+
+    // 3D turntable: the selected skin slithers in a ring so every angle is visible.
+    Camera3D cam{};
+    cam.position = Vector3{0.0f, 7.0f, 10.5f};
+    cam.target = Vector3{0.0f, 1.2f, 0.0f};
+    cam.up = Vector3{0.0f, 1.0f, 0.0f};
+    cam.fovy = 34.0f;
+    cam.projection = CAMERA_PERSPECTIVE;
+
+    constexpr size_t previewCount = 9;
+    BeginMode3D(cam);
+    DrawCubeV(Vector3{0.0f, -0.3f, 0.0f}, Vector3{5.6f, 0.6f, 5.6f}, Color{20, 24, 34, 255});
+    DrawCubeWiresV(Vector3{0.0f, -0.3f, 0.0f}, Vector3{5.6f, 0.6f, 5.6f}, Color{50, 58, 78, 255});
+
+    for (size_t i = 0; i < previewCount; ++i) {
+        const float a = animTime * 0.9f + static_cast<float>(i) * 0.55f;
+        const Vector3 p{std::cos(a) * 1.9f,
+                        1.2f + 0.18f * std::sin(animTime * 2.2f + static_cast<float>(i) * 0.5f),
+                        std::sin(a) * 1.9f};
+        const Color col = snakeColorAt(i, previewCount);
+
+        if (sk.trail == TrailKind::Glow) {
+            DrawSphereEx(p, 0.58f, 6, 8, render::withAlpha(sk.accent, 34));
+        }
+
+        if (i + 1 == previewCount) {
+            DrawSphereEx(p, 0.52f, 10, 12, headColor());
+            const Vector3 fwd{-std::sin(a), 0.0f, std::cos(a)};
+            const Vector3 right{-fwd.z, 0.0f, fwd.x};
+            for (int side = -1; side <= 1; side += 2) {
+                const Vector3 eye{p.x + fwd.x * 0.3f + right.x * 0.2f * static_cast<float>(side),
+                                  p.y + 0.18f,
+                                  p.z + fwd.z * 0.3f + right.z * 0.2f * static_cast<float>(side)};
+                DrawSphereEx(eye, 0.11f, 6, 8, Color{242, 246, 252, 255});
+                DrawSphereEx(Vector3{eye.x + fwd.x * 0.07f, eye.y, eye.z + fwd.z * 0.07f}, 0.05f, 5,
+                             6, eyeColor());
+            }
+            if (sk.crown) {
+                const Vector3 base{p.x, p.y + 0.5f, p.z};
+                DrawCubeV(base, Vector3{0.36f, 0.06f, 0.36f}, kGold);
+                DrawCubeV(Vector3{base.x - 0.12f, base.y + 0.1f, base.z},
+                          Vector3{0.07f, 0.18f, 0.07f}, kGold);
+                DrawCubeV(Vector3{base.x, base.y + 0.13f, base.z},
+                          Vector3{0.07f, 0.24f, 0.07f}, kGold);
+                DrawCubeV(Vector3{base.x + 0.12f, base.y + 0.1f, base.z},
+                          Vector3{0.07f, 0.18f, 0.07f}, kGold);
+            }
+        } else if (sk.shape == SegmentShape::Sphere) {
+            DrawSphereEx(p, 0.42f, 8, 10, col);
+        } else {
+            DrawCubeV(p, Vector3{0.78f, 0.7f, 0.78f}, col);
+        }
+    }
+    EndMode3D();
+
+    const char* title = "SKINS";
+    constexpr int titleSize = 36;
+    const int titleW = MeasureText(title, titleSize);
+    DrawText(title, (kWinW - titleW) / 2 + 2, 26, titleSize, Color{28, 62, 48, 255});
+    DrawText(title, (kWinW - titleW) / 2, 24, titleSize, kSnakeHead);
+
+    const int nameW = MeasureText(sk.name, 20);
+    DrawText(sk.name, (kWinW - nameW) / 2, 318, 20, kGold);
+
+    for (int i = 0; i < kSkinCount; ++i) {
+        const Rectangle skinCard = ui::skinCardRect(i);
+        const bool selected = (i == settings.skin);
+        const bool hovered = CheckCollisionPointRec(uiMouse, skinCard);
+        Color fill{24, 28, 38, 245};
+        if (selected) {
+            fill = Color{40, 56, 78, 250};
+        } else if (hovered) {
+            fill = Color{32, 38, 52, 245};
+        }
+        DrawRectangleRounded(skinCard, 0.16f, 8, fill);
+        DrawRectangleRoundedLinesEx(skinCard, 0.16f, 8, selected ? 2.0f : 1.2f,
+                                    selected ? kGold : Color{55, 62, 82, 255});
+
+        const int labelW = MeasureText(kSkins[i].name, 11);
+        DrawText(kSkins[i].name, static_cast<int>(skinCard.x + (skinCard.width - labelW) * 0.5f),
+                 static_cast<int>(skinCard.y + 8), 11,
+                 selected ? kText : Color{175, 185, 205, 255});
+
+        const float swatchY = skinCard.y + skinCard.height - 22.0f;
+        const float swatchX = skinCard.x + skinCard.width * 0.5f - 26.0f;
+        DrawCircleV(Vector2{swatchX, swatchY}, 7.0f, kSkins[i].head);
+        DrawCircleV(Vector2{swatchX + 18.0f, swatchY}, 7.0f, kSkins[i].body);
+        DrawCircleV(Vector2{swatchX + 36.0f, swatchY}, 7.0f, kSkins[i].tail);
+    }
+
+    drawButton(ui::skinsBackRect(), "BACK", true, false,
+               CheckCollisionPointRec(uiMouse, ui::skinsBackRect()));
+
+    const char* hint = "LEFT/RIGHT or click a card to equip  |  ENTER/ESC back";
     constexpr int hintSize = 12;
     const int hintW = MeasureText(hint, hintSize);
     DrawText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});

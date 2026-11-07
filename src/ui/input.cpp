@@ -177,26 +177,19 @@ void Game::handleInput() {
         boostHeld = IsKeyDown(KEY_SPACE) || uiBoostHeld;
     }
 
-    if (hasBuffered) {
-        return; // one buffered turn per tick at most
-    }
-    Dir wanted = dir;
-    bool pressed = false;
+    // Every key pressed this frame is offered to the two-slot queue (queueTurn does
+    // the validation), so two quick presses in one frame are both kept.
     if (IsKeyPressed(KEY_W) || IsKeyPressed(KEY_UP)) {
-        wanted = Dir::Up;
-        pressed = true;
-    } else if (IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN)) {
-        wanted = Dir::Down;
-        pressed = true;
-    } else if (IsKeyPressed(KEY_A) || IsKeyPressed(KEY_LEFT)) {
-        wanted = Dir::Left;
-        pressed = true;
-    } else if (IsKeyPressed(KEY_D) || IsKeyPressed(KEY_RIGHT)) {
-        wanted = Dir::Right;
-        pressed = true;
+        queueTurn(Dir::Up);
     }
-    if (pressed) {
-        queueTurn(wanted);
+    if (IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN)) {
+        queueTurn(Dir::Down);
+    }
+    if (IsKeyPressed(KEY_A) || IsKeyPressed(KEY_LEFT)) {
+        queueTurn(Dir::Left);
+    }
+    if (IsKeyPressed(KEY_D) || IsKeyPressed(KEY_RIGHT)) {
+        queueTurn(Dir::Right);
     }
 }
 

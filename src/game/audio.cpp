@@ -1,4 +1,5 @@
 #include "game/audio.hpp"
+#include "game/assets.hpp"
 
 #include "raylib.h"
 
@@ -54,20 +55,8 @@ Music g_music[static_cast<int>(MusicTrack::Count)];
 bool g_musicLoaded[static_cast<int>(MusicTrack::Count)] = {false, false, false};
 std::mt19937 g_rng{std::random_device{}()};
 
-// Files are looked up next to the executable too, so the game runs from any cwd.
-std::string resolveAsset(const char* relative) {
-    if (FileExists(relative)) {
-        return relative;
-    }
-    const char* appDir = GetApplicationDirectory();
-    if (appDir != nullptr) {
-        const std::string candidate = std::string(appDir) + relative;
-        if (FileExists(candidate.c_str())) {
-            return candidate;
-        }
-    }
-    return {};
-}
+// Files are looked up next to the executable too (see game/assets.hpp).
+std::string resolveAsset(const char* relative) { return resolveAssetPath(relative); }
 
 void loadSounds() {
     for (int i = 0; i < static_cast<int>(SfxId::Count); ++i) {

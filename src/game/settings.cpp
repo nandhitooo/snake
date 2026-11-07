@@ -1,5 +1,7 @@
 #include "game/settings.hpp"
 
+#include "game/config.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -67,6 +69,8 @@ Settings loadSettings(const std::string& path) {
             s.vsync = clampInt(readInt(raw, s.vsync), 0, 1);
         } else if (key == "fps") {
             s.fpsLimit = clampInt(readInt(raw, s.fpsLimit), 0, 3);
+        } else if (key == "render_quality") {
+            s.renderQuality = clampInt(readInt(raw, s.renderQuality), 0, 2);
         } else if (key == "speed") {
             s.speed = clampInt(readInt(raw, s.speed), 0, 2);
         } else if (key == "camera") {
@@ -102,6 +106,7 @@ void saveSettings(const Settings& s, const std::string& path) {
     out << "fullscreen=" << s.fullscreen << '\n';
     out << "vsync=" << s.vsync << '\n';
     out << "fps=" << s.fpsLimit << '\n';
+    out << "render_quality=" << s.renderQuality << '\n';
     out << "speed=" << s.speed << '\n';
     out << "camera=" << s.camera << '\n';
     out << "animations=" << s.animations << '\n';
@@ -125,6 +130,18 @@ int fpsTarget(int index) {
     case 1:
     default:
         return 60;
+    }
+}
+
+float renderQualityScale(int quality) {
+    switch (clampInt(quality, 0, 2)) {
+    case 0:
+        return kRenderScaleLow;
+    case 2:
+        return kRenderScaleHigh;
+    case 1:
+    default:
+        return kRenderScaleMedium;
     }
 }
 
@@ -171,6 +188,16 @@ std::string settingLabel(const Settings& s, int row) {
         case 1:
         default:
             return "60";
+        }
+    case RowRenderQuality:
+        switch (clampInt(s.renderQuality, 0, 2)) {
+        case 0:
+            return "LOW";
+        case 2:
+            return "HIGH";
+        case 1:
+        default:
+            return "MEDIUM";
         }
     case RowSpeed:
         switch (clampInt(s.speed, 0, 2)) {
@@ -235,6 +262,9 @@ void adjustSetting(Settings& s, int row, int delta) {
         break;
     case RowFps:
         s.fpsLimit = clampInt(s.fpsLimit + step, 0, 3);
+        break;
+    case RowRenderQuality:
+        s.renderQuality = clampInt(s.renderQuality + step, 0, 2);
         break;
     case RowSpeed:
         s.speed = clampInt(s.speed + step, 0, 2);

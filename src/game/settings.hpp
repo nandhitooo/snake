@@ -11,6 +11,7 @@ struct Settings {
     int fullscreen = 0; // 0/1
     int vsync = 1;      // 0/1
     int fpsLimit = 1;   // 0=30, 1=60, 2=120, 3=unlimited
+    int renderQuality = 1; // 0=low (1.0x), 1=medium (1.5x), 2=high (2.0x) supersampling
     int speed = 1;      // 0=slow, 1=normal, 2=fast
     int camera = 0;     // 0=iso, 1=top, 2=third person
     int animations = 1; // 0/1
@@ -43,6 +44,7 @@ enum SettingRow {
     RowFullscreen,
     RowVSync,
     RowFps,
+    RowRenderQuality,
     RowSpeed,
     RowCamera,
     RowAnimations,
@@ -65,5 +67,6 @@ void adjustSetting(Settings& s, int row, int delta);
 int fpsTarget(int index);
 float speedTickScale(int speed);
 float particleScale(int particles);
+float renderQualityScale(int quality); // supersampling factor for the canvas
 
 } // namespace snake

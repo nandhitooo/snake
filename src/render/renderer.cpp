@@ -1,6 +1,8 @@
 #include "game/game.hpp"
 #include "render/color.hpp"
+#include "ui/text.hpp"
 #include "render/snake_head.hpp"
+#include "render/translucent.hpp"
 #include "ui/layout.hpp"
 
 #include "rlgl.h"
@@ -42,12 +44,12 @@ Vector3 vnorm(Vector3 v) {
 Vector3 segmentWorld(const Game& g, size_t i, float y) { return g.visualSegmentWorld(i, y); }
 
 void drawKeycap(float x, float y, const char* key, const char* action) {
-    const int keyW = MeasureText(key, 11) + 10;
+    const int keyW = uiMeasure(key, 11) + 10;
     const Rectangle kr{x, y, static_cast<float>(keyW), 16.0f};
     DrawRectangleRounded(kr, 0.35f, 4, Color{36, 42, 56, 255});
     DrawRectangleRoundedLinesEx(kr, 0.35f, 4, 1.0f, Color{75, 85, 112, 255});
-    DrawText(key, static_cast<int>(x + 5), static_cast<int>(y + 3), 11, Color{235, 240, 250, 255});
-    DrawText(action, static_cast<int>(x + keyW + 5), static_cast<int>(y + 3), 11,
+    uiText(key, static_cast<int>(x + 5), static_cast<int>(y + 3), 11, Color{235, 240, 250, 255});
+    uiText(action, static_cast<int>(x + keyW + 5), static_cast<int>(y + 3), 11,
              Color{150, 156, 172, 255});
 }
 
@@ -67,7 +69,10 @@ const char* cameraLabel(CameraMode mode) {
 
 void drawArenaFloor() {
     // Slab under the floor gives the arena some thickness in perspective.
-    DrawCubeV(Vector3{0.0f, -0.35f, 0.0f}, Vector3{33.0f, 0.7f, 19.0f}, Color{13, 15, 22, 255});
+    // Its top face (centre + height/2) sits at y = -0.02, safely under the floor plane
+    // at y = 0: coplanar faces flickered (z-fighting) before.
+    DrawCubeV(Vector3{0.0f, kFloorSlabCenterY, 0.0f}, Vector3{33.0f, kFloorSlabHeight, 19.0f},
+              Color{13, 15, 22, 255});
 
     DrawPlane(Vector3{0.0f, 0.0f, 0.0f},
               Vector2{static_cast<float>(kCols), static_cast<float>(kRows)}, kArenaBg);
@@ -77,11 +82,11 @@ void drawArenaFloor() {
     const float halfH = static_cast<float>(kRows) * 0.5f;
     for (int x = 0; x <= kCols; ++x) {
         const float wx = static_cast<float>(x) - halfW;
-        DrawLine3D(Vector3{wx, 0.012f, -halfH}, Vector3{wx, 0.012f, halfH}, grid);
+        DrawLine3D(Vector3{wx, kLayerGrid, -halfH}, Vector3{wx, kLayerGrid, halfH}, grid);
     }
     for (int y = 0; y <= kRows; ++y) {
         const float wz = static_cast<float>(y) - halfH;
-        DrawLine3D(Vector3{-halfW, 0.012f, wz}, Vector3{halfW, 0.012f, wz}, grid);
+        DrawLine3D(Vector3{-halfW, kLayerGrid, wz}, Vector3{halfW, kLayerGrid, wz}, grid);
     }
 
     // Low border walls around the arena.
@@ -92,7 +97,7 @@ void drawArenaFloor() {
     DrawCubeV(Vector3{halfW + 0.18f, 0.22f, 0.0f}, Vector3{0.36f, 0.44f, static_cast<float>(kRows) + 0.7f}, wall);
 }
 
-void drawApple(const Game& g) {
+void drawApple(const Game& g, render::TranslucentQueue& q) {
     const Vector3 base = cellToWorld(g.food, 0.0f);
     const float bob = g.animations ? 0.06f * std::sin(g.animTime * 4.5f) : 0.0f;
 
@@ -105,11 +110,13 @@ void drawApple(const Game& g) {
     const Vector3 c{base.x, 0.55f * pop + bob, base.z};
 
     // Contact shadow keeps the apple visually grounded.
-    DrawPlane(Vector3{base.x, 0.015f, base.z}, Vector2{0.7f, 0.7f}, Color{0, 0, 0, 70});
+    q.add(Vector3{base.x, kLayerShadow, base.z}, [base] {
+        DrawPlane(Vector3{base.x, kLayerShadow, base.z}, Vector2{0.7f, 0.7f}, Color{0, 0, 0, 70});
+    });
 
-    DrawSphereEx(c, 0.4f * pop, 10, 12, kFood);
-    DrawSphereEx(vadd(c, vmul(Vector3{-0.13f, 0.14f, 0.12f}, pop)), 0.085f * pop, 6, 8,
-                 Color{255, 168, 168, 230});
+    DrawSphereEx(c, 0.4f * pop, kFoodRings, kFoodSlices, kFood);
+    DrawSphereEx(vadd(c, vmul(Vector3{-0.13f, 0.14f, 0.12f}, pop)), 0.085f * pop, kEyeRings,
+                 kEyeSlices, Color{255, 168, 168, 230});
     DrawCylinder(Vector3{c.x, c.y + 0.34f * pop, c.z}, 0.035f, 0.05f, 0.22f * pop, 6, kFoodStem);
 
     const float ang = g.animations ? g.animTime * 1.9f : 0.0f;
@@ -118,7 +125,7 @@ void drawApple(const Game& g) {
     DrawCubeV(leaf, Vector3{0.24f * pop, 0.045f, 0.12f * pop}, kFoodLeaf);
 }
 
-void drawSpecialFood(const Game& g) {
+void drawSpecialFood(const Game& g, render::TranslucentQueue& q) {
     const Vector3 base = cellToWorld(g.specialFood, 0.0f);
     const float pulse = g.animations ? 0.5f + 0.5f * std::sin(g.animTime * 6.0f) : 0.5f;
     float pop = 1.0f;
@@ -129,67 +136,84 @@ void drawSpecialFood(const Game& g) {
     const Vector3 c{base.x, (0.68f + (g.animations ? 0.05f * std::sin(g.animTime * 3.4f) : 0.0f)) * 1.0f,
                     base.z};
 
-    DrawPlane(Vector3{base.x, 0.015f, base.z}, Vector2{0.9f, 0.9f}, Color{0, 0, 0, 80});
+    q.add(Vector3{base.x, kLayerShadow, base.z}, [base] {
+        DrawPlane(Vector3{base.x, kLayerShadow, base.z}, Vector2{0.9f, 0.9f}, Color{0, 0, 0, 80});
+    });
 
-    // Halo shell + orbiting gold motes.
-    DrawSphereEx(c, (0.6f + 0.06f * pulse) * pop, 8, 10,
-                 Color{kSpecialHalo.r, kSpecialHalo.g, kSpecialHalo.b, 40});
+    // Halo shell (translucent pass) + orbiting gold motes (solid).
+    const float haloRadius = (0.6f + 0.06f * pulse) * pop;
+    q.add(c, [c, haloRadius] {
+        DrawSphereEx(c, haloRadius, kBodyRings, kBodySlices,
+                     Color{kSpecialHalo.r, kSpecialHalo.g, kSpecialHalo.b, 40});
+    });
     for (int i = 0; i < 8; ++i) {
         const float ang = g.animTime * 1.7f + static_cast<float>(i) * 0.785398f;
         const Vector3 mote{c.x + std::cos(ang) * 0.58f * pop, c.y + 0.16f * std::sin(ang * 2.0f),
                            c.z + std::sin(ang) * 0.58f * pop};
-        DrawSphereEx(mote, 0.07f * pop, 6, 8, kSpecialHalo);
+        DrawSphereEx(mote, 0.07f * pop, kEyeRings, kEyeSlices, kSpecialHalo);
     }
-    DrawSphereEx(c, 0.34f * pop, 10, 12, kSpecial);
-    DrawSphereEx(vadd(c, vmul(Vector3{-0.09f, 0.11f, 0.09f}, pop)), 0.075f * pop, 6, 8,
+    DrawSphereEx(c, 0.34f * pop, kFoodRings, kFoodSlices, kSpecial);
+    DrawSphereEx(vadd(c, vmul(Vector3{-0.09f, 0.11f, 0.09f}, pop)), 0.075f * pop, kEyeRings, kEyeSlices,
                  Color{245, 215, 255, 220});
 }
 
-void drawWarnings(const Game& g) {
+void drawWarnings(const Game& g, render::TranslucentQueue& q) {
     for (const Warning& w : g.warnings) {
         const Vector3 base = cellToWorld(w.cell, 0.0f);
         const float urgency = 1.0f - std::max(0.0f, w.timer / kWarningTime);
         const float blink = 0.5f + 0.5f * std::sin(g.animTime * (12.0f + urgency * 20.0f));
-
-        DrawPlane(Vector3{base.x, 0.02f, base.z}, Vector2{0.82f, 0.82f},
-                  Color{kWarning.r, kWarning.g, kWarning.b,
-                        static_cast<unsigned char>(45.0f + 110.0f * blink)});
-
         const float h = 0.18f + 0.5f * urgency;
-        DrawCubeWiresV(Vector3{base.x, h * 0.5f, base.z}, Vector3{0.7f, h, 0.7f},
-                       Color{kWarning.r, kWarning.g, kWarning.b,
-                             static_cast<unsigned char>(150.0f + 100.0f * blink)});
+        const Color fill{kWarning.r, kWarning.g, kWarning.b,
+                         static_cast<unsigned char>(45.0f + 110.0f * blink)};
+        const Color edge{kWarning.r, kWarning.g, kWarning.b,
+                         static_cast<unsigned char>(150.0f + 100.0f * blink)};
+        q.add(Vector3{base.x, h * 0.5f, base.z}, [base, h, fill, edge] {
+            DrawPlane(Vector3{base.x, kLayerWarning, base.z}, Vector2{0.82f, 0.82f}, fill);
+            DrawCubeWiresV(Vector3{base.x, h * 0.5f, base.z}, Vector3{0.7f, h, 0.7f}, edge);
+        });
     }
 }
 
-void drawObstacles(const Game& g) {
+void drawObstacles(const Game& g, render::TranslucentQueue& q) {
     for (const Obstacle& o : g.obstacles) {
         const float age = kObstacleLife - o.life;
         const float rise = std::clamp(age / 0.3f, 0.0f, 1.0f);
+        const bool fading = o.life < kObstacleFade;
         float fade = 1.0f;
-        if (o.life < kObstacleFade) {
+        if (fading) {
             fade = std::max(0.0f, o.life / kObstacleFade);
         }
         const unsigned char a = static_cast<unsigned char>(255.0f * fade);
         const unsigned char edgeA = static_cast<unsigned char>(200.0f * fade);
         // Shrink into the floor during the fade-out window.
-        const float sink = (o.life < kObstacleFade) ? std::max(0.15f, o.life / kObstacleFade) : 1.0f;
+        const float sink = fading ? std::max(0.15f, o.life / kObstacleFade) : 1.0f;
         const float h = 0.95f * rise * sink;
         const Vector3 base = cellToWorld(o.cell, 0.0f);
         const Vector3 center{base.x, h * 0.5f, base.z};
 
-        DrawPlane(Vector3{base.x, 0.014f, base.z}, Vector2{0.9f, 0.9f}, Color{0, 0, 0, 70});
-        DrawCubeV(center, Vector3{0.86f, h, 0.86f}, Color{kObstacle.r, kObstacle.g, kObstacle.b, a});
-        DrawCubeWiresV(center, Vector3{0.86f, h, 0.86f},
-                       Color{60, 68, 88, edgeA});
+        q.add(Vector3{base.x, kLayerShadow, base.z}, [base] {
+            DrawPlane(Vector3{base.x, kLayerShadow, base.z}, Vector2{0.9f, 0.9f},
+                      Color{0, 0, 0, 70});
+        });
 
-        // Hazard cross on the top face.
-        DrawLine3D(Vector3{base.x - 0.24f, h + 0.01f, base.z - 0.24f},
-                   Vector3{base.x + 0.24f, h + 0.01f, base.z + 0.24f},
-                   Color{150, 160, 185, edgeA});
-        DrawLine3D(Vector3{base.x - 0.24f, h + 0.01f, base.z + 0.24f},
-                   Vector3{base.x + 0.24f, h + 0.01f, base.z - 0.24f},
-                   Color{150, 160, 185, edgeA});
+        const auto drawBlock = [base, center, h, a, edgeA] {
+            DrawCubeV(center, Vector3{0.86f, h, 0.86f},
+                      Color{kObstacle.r, kObstacle.g, kObstacle.b, a});
+            DrawCubeWiresV(center, Vector3{0.86f, h, 0.86f}, Color{60, 68, 88, edgeA});
+
+            // Hazard cross on the top face.
+            DrawLine3D(Vector3{base.x - 0.24f, h + 0.01f, base.z - 0.24f},
+                       Vector3{base.x + 0.24f, h + 0.01f, base.z + 0.24f},
+                       Color{150, 160, 185, edgeA});
+            DrawLine3D(Vector3{base.x - 0.24f, h + 0.01f, base.z + 0.24f},
+                       Vector3{base.x + 0.24f, h + 0.01f, base.z - 0.24f},
+                       Color{150, 160, 185, edgeA});
+        };
+        if (fading) {
+            q.add(center, drawBlock); // see-through while it fades: translucent pass
+        } else {
+            drawBlock(); // fully opaque: solid pass
+        }
     }
 }
 
@@ -324,13 +348,13 @@ void drawHeadEyes(const HeadPose& p) {
         rlPushMatrix();
         rlTranslatef(eye.x, eye.y, eye.z);
         rlScalef(1.0f, squash, 1.0f);
-        DrawSphereEx(Vector3{0.0f, 0.0f, 0.0f}, kHeadEyeWhite * s, 6, 8, white);
+        DrawSphereEx(Vector3{0.0f, 0.0f, 0.0f}, kHeadEyeWhite * s, kEyeRings, kEyeSlices, white);
         const Vector3 pupil = vadd(vmul(fwd, kHeadEyePupilFwd * s), look);
-        DrawSphereEx(pupil, kHeadEyePupil * s * grow, 6, 8, p.eye);
+        DrawSphereEx(pupil, kHeadEyePupil * s * grow, kEyeRings, kEyeSlices, p.eye);
         if (kHeadEyeShine > 0.0f) {
             const Vector3 shine = vadd(pupil, vadd(vmul(right, kHeadEyeShineOffset * s),
                                                    vmul(up, kHeadEyeShineOffset * s)));
-            DrawSphereEx(shine, kHeadEyeShine * s * grow, 5, 6, WHITE);
+            DrawSphereEx(shine, kHeadEyeShine * s * grow, 8, 10, WHITE);
         }
         rlPopMatrix();
 
@@ -414,7 +438,7 @@ void drawSnakeHeadBody(const HeadPose& p) {
     }
     const float headRadius = radius * pulse;
 
-    DrawSphereEx(p.pos, headRadius, 12, 14, p.head);
+    DrawSphereEx(p.pos, headRadius, kHeadRings, kHeadSlices, p.head);
     drawMouthGeometry(p, headRadius);
     if (kHeadBlushSize > 0.0f) {
         drawHeadBlush(p);
@@ -429,7 +453,7 @@ void drawSnakeHeadBody(const HeadPose& p) {
 
 // Food that the logic tick already ate: it shrinks and slides into the mouth
 // until the drawn head arrives (progress reaches 1 on the next tick).
-void drawPendingBites(const Game& g) {
+void drawPendingBites(const Game& g, render::TranslucentQueue& q) {
     for (const PendingBite& bite : g.pendingBites) {
         const float t = std::clamp(bite.progress, 0.0f, 1.0f);
         const float pull = t * t * (3.0f - 2.0f * t);
@@ -441,31 +465,36 @@ void drawPendingBites(const Game& g) {
         const float scale = std::max(0.15f, 1.0f - 0.75f * pull);
         const float radius = (bite.special ? 0.34f : 0.4f) * scale;
 
-        DrawSphereEx(pos, radius, 10, 12, bite.color);
+        DrawSphereEx(pos, radius, kFoodRings, kFoodSlices, bite.color);
         if (!bite.special) {
             DrawCylinder(Vector3{pos.x, pos.y + radius * 0.85f, pos.z}, 0.03f, 0.045f,
                          0.18f * scale, 6, kFoodStem);
         } else {
-            DrawSphereEx(pos, radius * 1.35f, 6, 8,
-                         render::withAlpha(kSpecialHalo, 45));
+            const float haloR = radius * 1.35f;
+            q.add(pos, [pos, haloR] {
+                DrawSphereEx(pos, haloR, kEyeRings, kEyeSlices, render::withAlpha(kSpecialHalo, 45));
+            });
         }
     }
 }
 
-void drawSnakeBody(const Game& g) {
-    const size_t n = g.snake.size();
-    if (n == 0) {
-        return;
-    }
-    const bool anim = g.animations;
-    const float baseY = 0.45f;
-    const SkinDef& sk = g.skin();
-    const bool glowSkin = (sk.trail == TrailKind::Glow);
-    const Vector3 headFwd = dirToWorld(g.dir);
-    const Vector3 side{-headFwd.z, 0.0f, headFwd.x};
+// Layout of the player's body: radius taper, swallow bump and the animated centre
+// line. The solid pass and the glow pass share it so the glow shells always sit
+// exactly on the segments that are drawn.
+struct BodyRig {
+    const Game& g;
+    size_t n;
+    bool anim;
+    float baseY;
+    Vector3 headFwd;
+    Vector3 side;
+
+    explicit BodyRig(const Game& game)
+        : g(game), n(game.snake.size()), anim(game.animations), baseY(0.45f),
+          headFwd(dirToWorld(game.dir)), side(Vector3{-headFwd.z, 0.0f, headFwd.x}) {}
 
     // Swallow ripple: a bump that travels head -> tail after eating.
-    const auto swallowBump = [&](size_t i) {
+    float swallowBump(size_t i) const {
         if (!anim || g.swallowClock < 0.0f || n < 2) {
             return 1.0f;
         }
@@ -473,10 +502,10 @@ void drawSnakeBody(const Game& g) {
         const float pos = t * static_cast<float>(n - 1);
         const float d = std::fabs(static_cast<float>(i) - pos);
         return (d < 1.6f) ? 1.0f + 0.35f * (1.0f - d / 1.6f) : 1.0f;
-    };
+    }
 
     // Chibi taper: fat behind the head, slim at the tail, tiny tip.
-    const auto radiusAt = [&](size_t i) {
+    float radiusAt(size_t i) const {
         if (n > 2 && i + 1 == n) {
             return kHeadTailRadius;
         }
@@ -485,10 +514,10 @@ void drawSnakeBody(const Game& g) {
         }
         const float t = static_cast<float>(i) / static_cast<float>(n - 2);
         return kHeadBodyNear + (kHeadBodyFar - kHeadBodyNear) * std::clamp(t, 0.0f, 1.0f);
-    };
+    }
 
     // Interpolated segment position plus body wave and the tail wag.
-    const auto bodyPoint = [&](size_t i) {
+    Vector3 bodyPoint(size_t i) const {
         const float wave =
             anim ? kHeadWaveAmp * std::sin(g.animTime * 5.0f - static_cast<float>(i) * 0.55f) : 0.0f;
         Vector3 p = segmentWorld(g, i, baseY + wave);
@@ -501,42 +530,49 @@ void drawSnakeBody(const Game& g) {
             p.z += side.z * sway;
         }
         return p;
-    };
+    }
+};
+
+// Solid pass: connectors, body spheres and the head.
+void drawSnakeBody(const Game& g) {
+    const BodyRig rig(g);
+    const size_t n = rig.n;
+    if (n == 0) {
+        return;
+    }
+    const bool anim = rig.anim;
+    const SkinDef& sk = g.skin();
 
     // Round connectors first so the segment caps always sit on top of them.
     for (size_t i = 1; i < n; ++i) {
-        const Vector3 a = bodyPoint(i - 1);
-        const Vector3 b = bodyPoint(i);
+        const Vector3 a = rig.bodyPoint(i - 1);
+        const Vector3 b = rig.bodyPoint(i);
         const float dx = std::fabs(a.x - b.x);
         const float dz = std::fabs(a.z - b.z);
         if (dx > 1.05f || dz > 1.05f) {
             continue; // wrapped across the arena
         }
-        const float linkRadius = std::min(radiusAt(i - 1), radiusAt(i)) * 0.92f;
+        const float linkRadius = std::min(rig.radiusAt(i - 1), rig.radiusAt(i)) * 0.92f;
         Color link = g.snakeColorAt(i, n);
         if (sk.shape == SegmentShape::Cube && (i % 2) == 0) {
             link = render::tint(link, kHeadCubeTint);
         }
-        DrawCylinderEx(a, b, linkRadius, linkRadius, 8, link);
+        DrawCylinderEx(a, b, linkRadius, linkRadius, kLinkSides, link);
     }
 
     for (size_t i = n; i-- > 0;) {
         const float bob = (anim && i == 0) ? 0.03f * std::sin(g.animTime * 6.0f) : 0.0f;
-        const float bump = swallowBump(i);
-        const Vector3 p = bodyPoint(i);
+        const float bump = rig.swallowBump(i);
+        const Vector3 p = rig.bodyPoint(i);
         const Color col = g.snakeColorAt(i, n);
-        const float r = radiusAt(i);
-
-        if (glowSkin) {
-            DrawSphereEx(p, r * 1.45f * bump, 6, 8, render::withAlpha(sk.accent, 36));
-        }
+        const float r = rig.radiusAt(i);
 
         if (i == 0) {
             // Head bobs and leans a little as it moves.
             const float sway = anim ? 0.05f * std::sin(g.animTime * 2.2f) : 0.0f;
             HeadPose pose;
             pose.pos = Vector3{p.x + sway, p.y + 0.1f + bob, p.z};
-            pose.fwd = headFwd;
+            pose.fwd = rig.headFwd;
             pose.scale = bump;
             pose.time = g.animTime;
             pose.mouthOpen = g.mouthOpen;
@@ -558,24 +594,39 @@ void drawSnakeBody(const Game& g) {
             if (sk.shape == SegmentShape::Cube && (i % 2) == 1) {
                 seg = render::tint(col, kHeadCubeTint);
             }
-            DrawSphereEx(p, r * bump, 8, 10, seg);
+            DrawSphereEx(p, r * bump, kBodyRings, kBodySlices, seg);
         }
     }
 }
 
-void drawGhosts(const Game& g) {
-    for (const GhostHead& ghost : g.ghosts) {
-        g.drawGhostHead(ghost);
+// Translucent pass: the soft glow shells of the Neon/accent skins.
+void drawSnakeGlow(const Game& g, render::TranslucentQueue& q) {
+    if (g.skin().trail != TrailKind::Glow) {
+        return;
+    }
+    const BodyRig rig(g);
+    const Color glow = render::withAlpha(g.skin().accent, 36);
+    for (size_t i = 0; i < rig.n; ++i) {
+        const Vector3 p = rig.bodyPoint(i);
+        const float radius = rig.radiusAt(i) * 1.45f * rig.swallowBump(i);
+        q.add(p, [p, radius, glow] { DrawSphereEx(p, radius, kEyeRings, kEyeSlices, glow); });
     }
 }
 
-void drawParticles3D(const Game& g) {
+void drawGhosts(const Game& g, render::TranslucentQueue& q) {
+    for (const GhostHead& ghost : g.ghosts) {
+        q.add(cellToWorld(ghost.cell, 0.6f), [&g, &ghost] { g.drawGhostHead(ghost); });
+    }
+}
+
+void drawParticles3D(const Game& g, render::TranslucentQueue& q) {
     for (const WorldParticle& p : g.particles) {
         const float ratio = (p.maxLife > 0.0f) ? std::clamp(p.life / p.maxLife, 0.0f, 1.0f) : 0.0f;
         const Color col = render::withAlpha(p.color, static_cast<unsigned char>(
                                                    static_cast<float>(p.color.a) * ratio));
-        const float s = p.size * (0.4f + 0.6f * ratio);
-        DrawCubeV(p.pos, Vector3{s, s, s}, col);
+        const float size = p.size * (0.4f + 0.6f * ratio);
+        const Vector3 pos = p.pos;
+        q.add(pos, [pos, size, col] { DrawCubeV(pos, Vector3{size, size, size}, col); });
     }
 }
 
@@ -584,8 +635,11 @@ Vector3 aiSegmentWorld(const AiSnake& ai, size_t i, float y, float alpha) {
         return Vector3{0.0f, y, 0.0f};
     }
     Vector3 cur = cellToWorld(ai.body[i], y);
-    if (ai.prevBody.size() == ai.body.size() && i < ai.prevBody.size() && alpha > 0.0f) {
-        const Vector3 prev = cellToWorld(ai.prevBody[i], y);
+    // Same clamped lookup as Game::visualSegmentWorld: the snapshot may be a different
+    // length (spawn pop-in, a rival that just moved), and the body must still glide.
+    if (!ai.prevBody.empty() && alpha > 0.0f) {
+        const size_t prevIndex = std::min(i, ai.prevBody.size() - 1);
+        const Vector3 prev = cellToWorld(ai.prevBody[prevIndex], y);
         if (std::fabs(cur.x - prev.x) <= 1.01f && std::fabs(cur.z - prev.z) <= 1.01f) {
             cur.x = prev.x + (cur.x - prev.x) * alpha;
             cur.z = prev.z + (cur.z - prev.z) * alpha;
@@ -594,14 +648,16 @@ Vector3 aiSegmentWorld(const AiSnake& ai, size_t i, float y, float alpha) {
     return cur;
 }
 
-void drawAiWarnings(const Game& g) {
+void drawAiWarnings(const Game& g, render::TranslucentQueue& q) {
     for (const AiSpawnWarning& w : g.aiWarnings) {
         const Vector3 base = cellToWorld(w.cell, 0.0f);
         const float blink = 0.5f + 0.5f * std::sin(g.animTime * 11.0f);
-        DrawPlane(Vector3{base.x, 0.02f, base.z}, Vector2{0.9f, 0.9f},
-                  Color{150, 95, 225, static_cast<unsigned char>(45.0f + 110.0f * blink)});
-        DrawCubeWiresV(Vector3{base.x, 0.35f, base.z}, Vector3{0.7f, 0.7f, 0.7f},
-                       Color{190, 140, 255, static_cast<unsigned char>(150.0f + 100.0f * blink)});
+        const Color fill{150, 95, 225, static_cast<unsigned char>(45.0f + 110.0f * blink)};
+        const Color edge{190, 140, 255, static_cast<unsigned char>(150.0f + 100.0f * blink)};
+        q.add(Vector3{base.x, 0.35f, base.z}, [base, fill, edge] {
+            DrawPlane(Vector3{base.x, kLayerAiSpawn, base.z}, Vector2{0.9f, 0.9f}, fill);
+            DrawCubeWiresV(Vector3{base.x, 0.35f, base.z}, Vector3{0.7f, 0.7f, 0.7f}, edge);
+        });
     }
 }
 
@@ -632,7 +688,7 @@ void drawAiSnakes(const Game& g) {
 
             if (i == 0) {
                 const Vector3 headPos{p.x, p.y + 0.05f, p.z};
-                DrawSphereEx(headPos, 0.44f * scale, 8, 10, rivalBody);
+                DrawSphereEx(headPos, 0.44f * scale, kBodyRings, kBodySlices, rivalBody);
                 DrawSphereWires(headPos, 0.47f * scale, 6, 8, hint);
 
                 // Same eyes as the player, scaled down and blinking out of phase.
@@ -656,6 +712,12 @@ void drawAiSnakes(const Game& g) {
 
 } // namespace
 
+void applyUiScale(float scale) {
+    // BeginTextureMode / EndMode3D leave MODELVIEW active with an identity matrix.
+    rlLoadIdentity();
+    rlScalef(scale, scale, 1.0f);
+}
+
 // Public entry point: the gameplay snake and the skins preview both call this.
 void drawSnakeHead(const HeadPose& pose) { drawSnakeHeadBody(pose); }
 
@@ -664,7 +726,7 @@ void Game::drawGhostHead(const GhostHead& g) const {
     const unsigned char alpha = static_cast<unsigned char>(165.0f * fade);
     const Vector3 head = cellToWorld(g.cell, 0.6f);
     const Color body = render::withAlpha(headColor(), alpha);
-    DrawSphereEx(head, 0.46f, 8, 10, body);
+    DrawSphereEx(head, 0.46f, kBodyRings, kBodySlices, body);
 
     const Vector3 fwd = dirToWorld(g.dir);
     const Vector3 right{-fwd.z, 0.0f, fwd.x};
@@ -672,8 +734,8 @@ void Game::drawGhostHead(const GhostHead& g) const {
         const Vector3 eye = vadd(vadd(head, vmul(fwd, 0.28f)),
                                  vadd(vmul(right, 0.18f * static_cast<float>(side)),
                                       Vector3{0.0f, 0.14f, 0.0f}));
-        DrawSphereEx(eye, 0.09f, 6, 8, Color{235, 242, 250, alpha});
-        DrawSphereEx(vadd(eye, vmul(fwd, 0.06f)), 0.045f, 5, 6, Color{20, 24, 30, alpha});
+        DrawSphereEx(eye, 0.09f, kEyeRings, kEyeSlices, Color{235, 242, 250, alpha});
+        DrawSphereEx(vadd(eye, vmul(fwd, 0.06f)), 0.045f, kEyeRings, kEyeSlices, Color{20, 24, 30, alpha});
     }
 }
 
@@ -736,36 +798,42 @@ void Game::draw() const {
     cam.target.x += shakeOffX;
     cam.target.y += shakeOffY;
 
+    // Pass 1: everything solid (translucent pieces are queued, not drawn).
+    // Pass 2: the queue, far -> near, with depth writes off.
+    render::TranslucentQueue translucent;
     BeginMode3D(cam);
     drawArenaFloor();
-    drawWarnings(*this);
-    drawAiWarnings(*this);
-    drawObstacles(*this);
-    drawGhosts(*this);
+    drawWarnings(*this, translucent);
+    drawAiWarnings(*this, translucent);
+    drawObstacles(*this, translucent);
+    drawGhosts(*this, translucent);
     drawAiSnakes(*this);
-    drawApple(*this);
+    drawApple(*this, translucent);
     if (hasSpecial) {
-        drawSpecialFood(*this);
+        drawSpecialFood(*this, translucent);
     }
-    drawPendingBites(*this);
+    drawPendingBites(*this, translucent);
     // With animation on, the body is gone on game over: it burst into shards.
     if (!(over && animations)) {
         drawSnakeBody(*this);
+        drawSnakeGlow(*this, translucent);
     }
-    drawParticles3D(*this);
+    drawParticles3D(*this, translucent);
+    translucent.flush(cam.position);
     EndMode3D();
+    applyUiScale(uiScale); // EndMode3D reset the modelview matrix
 
     // Floating score popups projected from world space.
     for (const FloatingText& ft : floatingTexts) {
         const float lifeRatio = (ft.maxLife > 0.0f) ? (ft.life / ft.maxLife) : 0.0f;
         Color col = ft.color;
         col.a = static_cast<unsigned char>(255.0f * std::min(1.0f, lifeRatio * 1.5f));
-        const Vector2 screen = GetWorldToScreen(ft.pos, cam);
+        const Vector2 screen = GetWorldToScreenEx(ft.pos, cam, kWinW, kWinH);
         constexpr int fSize = 16;
-        const int tw = MeasureText(ft.text.c_str(), fSize);
-        DrawText(ft.text.c_str(), static_cast<int>(screen.x - tw * 0.5f) + 1,
+        const int tw = uiMeasure(ft.text.c_str(), fSize);
+        uiText(ft.text.c_str(), static_cast<int>(screen.x - tw * 0.5f) + 1,
                  static_cast<int>(screen.y) + 1, fSize, Color{0, 0, 0, col.a});
-        DrawText(ft.text.c_str(), static_cast<int>(screen.x - tw * 0.5f),
+        uiText(ft.text.c_str(), static_cast<int>(screen.x - tw * 0.5f),
                  static_cast<int>(screen.y), fSize, col);
     }
 
@@ -773,13 +841,13 @@ void Game::draw() const {
     if (fxTextTimer > 0.0f) {
         const char* alert = TextFormat("SPECIAL: %s", fxText.c_str());
         constexpr int fontSize = 24;
-        const int textWidth = MeasureText(alert, fontSize);
+        const int textWidth = uiMeasure(alert, fontSize);
         const Rectangle banner{static_cast<float>(kArenaX + (kArenaW - textWidth - 44) / 2) + shakeX,
                                static_cast<float>(kArenaY + (kArenaH - 58) / 2) + shakeY,
                                static_cast<float>(textWidth + 44), 58.0f};
         DrawRectangleRounded(banner, 0.25f, 8, Color{14, 16, 24, 235});
         DrawRectangleRoundedLinesEx(banner, 0.25f, 8, 2.0f, fxColor);
-        DrawText(alert, static_cast<int>(banner.x + (banner.width - textWidth) * 0.5f),
+        uiText(alert, static_cast<int>(banner.x + (banner.width - textWidth) * 0.5f),
                  static_cast<int>(banner.y + (banner.height - fontSize) * 0.5f), fontSize, fxColor);
     }
 
@@ -809,7 +877,7 @@ void Game::draw() const {
     }
 
     // Camera hint inside the arena (keeps the key discoverable).
-    DrawText(TextFormat("CAM: %s  [C]", cameraLabel(cameraMode)), kArenaX + 10,
+    uiText(TextFormat("CAM: %s  [C]", cameraLabel(cameraMode)), kArenaX + 10,
              kArenaY + kArenaH - 16, 11, Color{150, 165, 195, 210});
 
     // Pause overlay.
@@ -829,14 +897,14 @@ void Game::draw() const {
 
         const char* pTitle = "GAME PAUSED";
         constexpr int ptSize = 24;
-        const int ptw = MeasureText(pTitle, ptSize);
-        DrawText(pTitle, static_cast<int>(pCard.x + (pCard.width - ptw) * 0.5f),
+        const int ptw = uiMeasure(pTitle, ptSize);
+        uiText(pTitle, static_cast<int>(pCard.x + (pCard.width - ptw) * 0.5f),
                  static_cast<int>(pCard.y + 60), ptSize, kText);
 
         const char* prompt1 = "Press P or click RESUME to continue";
         constexpr int pr1Size = 13;
-        const int pr1w = MeasureText(prompt1, pr1Size);
-        DrawText(prompt1, static_cast<int>(pCard.x + (pCard.width - pr1w) * 0.5f),
+        const int pr1w = uiMeasure(prompt1, pr1Size);
+        uiText(prompt1, static_cast<int>(pCard.x + (pCard.width - pr1w) * 0.5f),
                  static_cast<int>(pCard.y + 100), pr1Size, Color{170, 180, 205, 255});
 
         const Rectangle sBtn = ui::pauseSettingsRect();
@@ -844,8 +912,8 @@ void Game::draw() const {
 
         const char* prompt2 = TextFormat("ESC: Menu   |   Camera: %s", cameraLabel(cameraMode));
         constexpr int pr2Size = 12;
-        const int pr2w = MeasureText(prompt2, pr2Size);
-        DrawText(prompt2, static_cast<int>(pCard.x + (pCard.width - pr2w) * 0.5f),
+        const int pr2w = uiMeasure(prompt2, pr2Size);
+        uiText(prompt2, static_cast<int>(pCard.x + (pCard.width - pr2w) * 0.5f),
                  static_cast<int>(pCard.y + 166), pr2Size, Color{125, 135, 155, 255});
     }
 
@@ -854,17 +922,17 @@ void Game::draw() const {
     DrawLine(0, kArenaY, kWinW, kArenaY, Color{52, 60, 82, 255});
 
     DrawCircle(kPanelX + 20, kPanelY + 16, 4.0f, kGood);
-    DrawText("SCORE", kPanelX + 30, kPanelY + 10, 10, Color{140, 148, 168, 255});
-    DrawText(TextFormat("%d", score), kPanelX + 30, kPanelY + 22, 19, kText);
+    uiText("SCORE", kPanelX + 30, kPanelY + 10, 10, Color{140, 148, 168, 255});
+    uiText(TextFormat("%d", score), kPanelX + 30, kPanelY + 22, 19, kText);
 
     DrawCircle(kPanelX + 130, kPanelY + 16, 4.0f, kGold);
-    DrawText("HIGH SCORE", kPanelX + 140, kPanelY + 10, 10, Color{180, 170, 120, 255});
-    DrawText(TextFormat("%d", highScore), kPanelX + 140, kPanelY + 22, 19, kGold);
+    uiText("HIGH SCORE", kPanelX + 140, kPanelY + 10, 10, Color{180, 170, 120, 255});
+    uiText(TextFormat("%d", highScore), kPanelX + 140, kPanelY + 22, 19, kGold);
 
     const int length = static_cast<int>(snake.size());
     DrawCircle(kPanelX + 250, kPanelY + 16, 4.0f, kCyan);
-    DrawText("LENGTH", kPanelX + 260, kPanelY + 10, 10, Color{120, 165, 185, 255});
-    DrawText(TextFormat("%d", length), kPanelX + 260, kPanelY + 22, 19, kCyan);
+    uiText("LENGTH", kPanelX + 260, kPanelY + 10, 10, Color{120, 165, 185, 255});
+    uiText(TextFormat("%d", length), kPanelX + 260, kPanelY + 22, 19, kCyan);
 
     {
         const Rectangle bBadge{static_cast<float>(kPanelX + 355), static_cast<float>(kPanelY + 10),
@@ -872,22 +940,22 @@ void Game::draw() const {
         if (paused) {
             DrawRectangleRounded(bBadge, 0.35f, 6, Color{36, 44, 60, 255});
             DrawRectangleRoundedLinesEx(bBadge, 0.35f, 6, 1.2f, kCyan);
-            DrawText("PAUSED", static_cast<int>(bBadge.x + 22), static_cast<int>(bBadge.y + 7), 12,
+            uiText("PAUSED", static_cast<int>(bBadge.x + 22), static_cast<int>(bBadge.y + 7), 12,
                      kCyan);
         } else if (boostActive()) {
             DrawRectangleRounded(bBadge, 0.35f, 6, Color{35, 95, 62, 255});
             DrawRectangleRoundedLinesEx(bBadge, 0.35f, 6, 1.5f, kBoostOn);
-            DrawText("BOOSTING", static_cast<int>(bBadge.x + 14), static_cast<int>(bBadge.y + 7), 12,
+            uiText("BOOSTING", static_cast<int>(bBadge.x + 14), static_cast<int>(bBadge.y + 7), 12,
                      WHITE);
         } else if (length <= kMinLength) {
             DrawRectangleRounded(bBadge, 0.35f, 6, Color{28, 30, 40, 255});
             DrawRectangleRoundedLinesEx(bBadge, 0.35f, 6, 1.0f, Color{55, 60, 75, 255});
-            DrawText("MIN LEN", static_cast<int>(bBadge.x + 22), static_cast<int>(bBadge.y + 7), 12,
+            uiText("MIN LEN", static_cast<int>(bBadge.x + 22), static_cast<int>(bBadge.y + 7), 12,
                      GRAY);
         } else {
             DrawRectangleRounded(bBadge, 0.35f, 6, Color{30, 36, 48, 255});
             DrawRectangleRoundedLinesEx(bBadge, 0.35f, 6, 1.0f, Color{60, 72, 95, 255});
-            DrawText("BOOST: OK", static_cast<int>(bBadge.x + 12), static_cast<int>(bBadge.y + 7),
+            uiText("BOOST: OK", static_cast<int>(bBadge.x + 12), static_cast<int>(bBadge.y + 7),
                      12, Color{130, 190, 160, 255});
         }
     }
@@ -906,18 +974,18 @@ void Game::draw() const {
             DrawRectangleRoundedLinesEx(fillBar, 0.25f, 4, 1.0f, fxColor);
             const char* fxStr =
                 TextFormat("%s %.1fs", effectName(activeEffect), static_cast<double>(effectTimer));
-            const int tw = MeasureText(fxStr, 12);
-            DrawText(fxStr, static_cast<int>(fxBar.x + (fxBar.width - tw) * 0.5f),
+            const int tw = uiMeasure(fxStr, 12);
+            uiText(fxStr, static_cast<int>(fxBar.x + (fxBar.width - tw) * 0.5f),
                      static_cast<int>(fxBar.y + 7), 12, fxColor);
         } else if (fxTextTimer > 0.0f) {
             const char* fxStr = TextFormat("FX: %s", fxText.c_str());
-            const int tw = MeasureText(fxStr, 12);
-            DrawText(fxStr, static_cast<int>(fxBar.x + (fxBar.width - tw) * 0.5f),
+            const int tw = uiMeasure(fxStr, 12);
+            uiText(fxStr, static_cast<int>(fxBar.x + (fxBar.width - tw) * 0.5f),
                      static_cast<int>(fxBar.y + 7), 12, fxColor);
         } else {
             const char* fxStr = "FX: NONE";
-            const int tw = MeasureText(fxStr, 12);
-            DrawText(fxStr, static_cast<int>(fxBar.x + (fxBar.width - tw) * 0.5f),
+            const int tw = uiMeasure(fxStr, 12);
+            uiText(fxStr, static_cast<int>(fxBar.x + (fxBar.width - tw) * 0.5f),
                      static_cast<int>(fxBar.y + 7), 12, Color{110, 116, 134, 255});
         }
     }
@@ -967,21 +1035,22 @@ void Game::draw() const {
                              Color{22, 25, 36, static_cast<unsigned char>(248.0f * overFade)});
         DrawRectangleRoundedLinesEx(modal, 0.12f, 10, 2.0f, Color{235, 75, 75, 220});
 
-        const char* title = "GAME OVER";
+        const char* title = won ? "YOU WIN" : "GAME OVER";
         constexpr int tSize = 38;
-        const int tw = MeasureText(title, tSize);
-        DrawText(title, static_cast<int>(modal.x + (modal.width - tw) * 0.5f),
-                 static_cast<int>(modal.y + 24), tSize, Color{242, 85, 85, 255});
+        const int tw = uiMeasure(title, tSize);
+        uiText(title, static_cast<int>(modal.x + (modal.width - tw) * 0.5f),
+                 static_cast<int>(modal.y + 24), tSize, won ? kGood : Color{242, 85, 85, 255});
 
         if (isNewHighRecord) {
-            const char* recordText = "★ NEW BEST RECORD! ★";
-            const int rtw = MeasureText(recordText, 14);
-            const Rectangle rBadge{modal.x + (modal.width - rtw - 28) * 0.5f, modal.y + 72,
-                                   static_cast<float>(rtw + 28), 24.0f};
+            const char* recordText = "NEW BEST RECORD!";
+            const float rtw = uiMeasure(recordText, 14);
+            const Rectangle rBadge{modal.x + (modal.width - rtw - 60.0f) * 0.5f, modal.y + 72,
+                                   rtw + 60.0f, 24.0f};
             DrawRectangleRounded(rBadge, 0.5f, 6, Color{80, 65, 20, 230});
             DrawRectangleRoundedLinesEx(rBadge, 0.5f, 6, 1.5f, kGold);
-            DrawText(recordText, static_cast<int>(rBadge.x + 14), static_cast<int>(rBadge.y + 5),
-                     14, kGold);
+            drawStar(rBadge.x + 16.0f, rBadge.y + 12.0f, 6.0f, kGold);
+            drawStar(rBadge.x + rBadge.width - 16.0f, rBadge.y + 12.0f, 6.0f, kGold);
+            uiText(recordText, rBadge.x + 30.0f, rBadge.y + 5.0f, 14, kGold);
         }
 
         const float cardY = isNewHighRecord ? (modal.y + 110) : (modal.y + 88);
@@ -991,22 +1060,22 @@ void Game::draw() const {
         const Rectangle p1{modal.x + 24, cardY, cardW, cardH};
         DrawRectangleRounded(p1, 0.2f, 6, Color{30, 34, 48, 255});
         DrawRectangleRoundedLinesEx(p1, 0.2f, 6, 1.0f, Color{55, 64, 88, 255});
-        DrawText("FINAL SCORE", static_cast<int>(p1.x + 14), static_cast<int>(p1.y + 12), 11,
+        uiText("FINAL SCORE", static_cast<int>(p1.x + 14), static_cast<int>(p1.y + 12), 11,
                  Color{150, 160, 180, 255});
         const std::string sVal = std::to_string(score);
-        DrawText(sVal.c_str(), static_cast<int>(p1.x + 14), static_cast<int>(p1.y + 32), 28, kGood);
+        uiText(sVal.c_str(), static_cast<int>(p1.x + 14), static_cast<int>(p1.y + 32), 28, kGood);
 
         const Rectangle p2{modal.x + modal.width - cardW - 24, cardY, cardW, cardH};
         DrawRectangleRounded(p2, 0.2f, 6, Color{30, 34, 48, 255});
         DrawRectangleRoundedLinesEx(p2, 0.2f, 6, 1.0f, Color{55, 64, 88, 255});
-        DrawText("SESSION BEST", static_cast<int>(p2.x + 14), static_cast<int>(p2.y + 12), 11,
+        uiText("SESSION BEST", static_cast<int>(p2.x + 14), static_cast<int>(p2.y + 12), 11,
                  Color{180, 170, 130, 255});
         const std::string hVal = std::to_string(highScore);
-        DrawText(hVal.c_str(), static_cast<int>(p2.x + 14), static_cast<int>(p2.y + 32), 28, kGold);
+        uiText(hVal.c_str(), static_cast<int>(p2.x + 14), static_cast<int>(p2.y + 32), 28, kGold);
 
         const std::string lenText = "Final Snake Length: " + std::to_string(length);
-        const int lenW = MeasureText(lenText.c_str(), 14);
-        DrawText(lenText.c_str(), static_cast<int>(modal.x + (modal.width - lenW) * 0.5f),
+        const int lenW = uiMeasure(lenText.c_str(), 14);
+        uiText(lenText.c_str(), static_cast<int>(modal.x + (modal.width - lenW) * 0.5f),
                  static_cast<int>(cardY + cardH + 18), 14, Color{170, 180, 200, 255});
 
         const float actionY = modal.y + modal.height - 48.0f;

@@ -61,6 +61,21 @@ bool isOpposite(Dir a, Dir b) {
            (a == Dir::Left && b == Dir::Right) || (a == Dir::Right && b == Dir::Left);
 }
 
+bool effectIsGood(Effect e) {
+    switch (e) {
+    case Effect::Bonus:
+    case Effect::Slow:
+    case Effect::Trim:
+    case Effect::Cleanse:
+        return true;
+    case Effect::Haste:
+    case Effect::Grow:
+    case Effect::Curse:
+        return false;
+    }
+    return false;
+}
+
 const char* effectName(Effect e) {
     switch (e) {
     case Effect::Bonus:
@@ -104,8 +119,7 @@ void Game::reset() {
     prevSnake = snake;
     tickAlpha = 0.0f;
     dir = Dir::Right;
-    buffered = Dir::Right;
-    hasBuffered = false;
+    clearTurnQueue();
     boostHeld = false;
     uiBoostHeld = false;
     boostRequiresRelease = true; // a held key from the menu must not boost the new round
@@ -129,6 +143,7 @@ void Game::reset() {
     fxTextTimer = 0.0f;
     fxColor = kText;
     over = false;
+    won = false;
     score = 0;
     survival = 0.0f;
     scoredSeconds = 0;
@@ -147,6 +162,7 @@ void Game::reset() {
     blinkT = -1.0f;
     blinkExtra = 0;
     nextBlinkIn = 2.5f;
+    trailTimer = 0.0f;
     camYaw = 0.0f;
     camBlend = 0.0f;
     camAppliedMode = cameraMode;
@@ -159,6 +175,8 @@ void Game::startGame() {
     mode = Mode::Playing;
     transitionT = animations ? 1.0f : 0.0f;
 }
+
+void Game::clearTurnQueue() { turnQueueCount = 0; }
 
 bool Game::takeFullscreenRequest() {
     const bool request = fsRequest;
@@ -236,6 +254,11 @@ void Game::spawnFood() {
         }
     }
     if (empty.empty()) {
+        // Nowhere left to put food: the board is full, so the round is won.
+        if (!over) {
+            won = true;
+            gameOver();
+        }
         return;
     }
     std::uniform_int_distribution<size_t> pick(0, empty.size() - 1);
@@ -304,25 +327,23 @@ void Game::addSolidObstacle() {
 
 void Game::applyEffect(Effect e) {
     fxTextTimer = kFxMessageTime;
+    fxColor = effectIsGood(e) ? kGood : kBad;
     switch (e) {
     case Effect::Bonus:
         score += kBonusScore;
         fxText = "BONUS +50";
-        fxColor = kGood;
         break;
     case Effect::Slow:
         speedFactor = kSlowFactor;
         effectTimer = kEffectDuration;
         activeEffect = e;
         fxText = effectName(e);
-        fxColor = kGood;
         break;
     case Effect::Haste:
         speedFactor = kHasteFactor;
         effectTimer = kEffectDuration;
         activeEffect = e;
         fxText = effectName(e);
-        fxColor = kBad;
         break;
     case Effect::Grow: {
         const Cell tail = snake.back();
@@ -330,7 +351,6 @@ void Game::applyEffect(Effect e) {
             snake.push_back(tail);
         }
         fxText = "GROW +3";
-        fxColor = kBad;
         break;
     }
     case Effect::Trim:
@@ -338,27 +358,21 @@ void Game::applyEffect(Effect e) {
             snake.pop_back();
         }
         fxText = "TRIM -2";
-        fxColor = kGood;
         break;
     case Effect::Cleanse:
         obstacles.clear();
         warnings.clear();
         fxText = "CLEANSE";
-        fxColor = kGood;
         break;
     case Effect::Curse:
         for (int i = 0; i < kCurseObstacles; ++i) {
             addSolidObstacle();
         }
         fxText = "CURSE +3";
-        fxColor = kBad;
         break;
     }
 
-    // Spec grouping: slow/trim/curse are the bad outcomes, the rest are good.
-    const bool good = (e == Effect::Bonus || e == Effect::Haste || e == Effect::Grow ||
-                       e == Effect::Cleanse);
-    audio.play(good ? SfxId::SpecialGood : SfxId::SpecialBad);
+    // The special SFX plays when the bite lands (resolvePendingBites), not here.
 }
 
 // Every 8 s: mark 1-3 random empty cells that are not within 4 cells of the
@@ -452,15 +466,18 @@ bool Game::checkCollision(const Cell& c, bool ignoreTail) const {
     return false;
 }
 
+// Two-slot turn queue. A turn is checked against the last queued direction (or the
+// current heading when the queue is empty), so a quick "up, left" pair is kept
+// instead of the second key being dropped.
 void Game::queueTurn(Dir wanted) {
-    if (over || hasBuffered) {
+    if (over || turnQueueCount >= kTurnQueueSlots) {
         return;
     }
-    if (isOpposite(wanted, dir)) {
+    const Dir last = (turnQueueCount > 0) ? turnQueue[turnQueueCount - 1] : dir;
+    if (wanted == last || isOpposite(wanted, last)) {
         return;
     }
-    buffered = wanted;
-    hasBuffered = true;
+    turnQueue[turnQueueCount++] = wanted;
 }
 
 // One fixed logic tick.
@@ -476,11 +493,16 @@ void Game::update() {
     // Snapshot for the render interpolation between this tick and the next one.
     prevSnake = snake;
 
-    if (hasBuffered) {
-        if (!isOpposite(buffered, dir)) {
-            dir = buffered;
+    // At most one queued turn is consumed per tick.
+    if (turnQueueCount > 0) {
+        const Dir next = turnQueue[0];
+        for (int i = 1; i < turnQueueCount; ++i) {
+            turnQueue[i - 1] = turnQueue[i];
         }
-        hasBuffered = false;
+        --turnQueueCount;
+        if (!isOpposite(next, dir)) {
+            dir = next;
+        }
     }
 
     // Boost wear: one tail segment every third boosted tick, never below 3.
@@ -533,18 +555,23 @@ void Game::update() {
         bite.labelColor = kGood;
         pendingBites.push_back(bite);
         spawnFood();
+        if (over) {
+            return; // board full: spawnFood ended the round
+        }
     } else if (eatsSpecial) {
         score += 10;
         if (highScore > 0 && score > highScore) {
             isNewHighRecord = true;
         }
         const Vector3 sfPos = cellToWorld(specialFood, 0.9f);
+        const bool effectGood = effectIsGood(specialEffect);
         hasSpecial = false;
         applyEffect(specialEffect);
         PendingBite bite;
         bite.pos = sfPos;
         bite.color = kSpecial;
         bite.special = true;
+        bite.good = effectGood;
         bite.label = fxText;
         bite.labelColor = fxColor;
         pendingBites.push_back(bite);
@@ -630,8 +657,7 @@ void Game::togglePause() {
     if (paused) {
         boostHeld = false;
         uiBoostHeld = false;
-        hasBuffered = false; // a turn queued before the pause must not fire on resume
-        buffered = dir;
+        clearTurnQueue(); // a turn queued before the pause must not fire on resume
         boostRequiresRelease = true;
     }
 }
@@ -828,8 +854,12 @@ Vector3 Game::visualSegmentWorld(size_t index, float y) const {
         return Vector3{0.0f, y, 0.0f};
     }
     Vector3 cur = cellToWorld(snake[index], y);
-    if (prevSnake.size() == snake.size() && index < prevSnake.size() && tickAlpha > 0.0f) {
-        const Vector3 prev = cellToWorld(prevSnake[index], y);
+    // The snapshot can be shorter or longer than the snake (eat, Grow, Trim, boost wear):
+    // clamp the index so new tail segments start from the old tail instead of the
+    // whole body skipping a cell.
+    if (!prevSnake.empty() && tickAlpha > 0.0f) {
+        const size_t prevIndex = std::min(index, prevSnake.size() - 1);
+        const Vector3 prev = cellToWorld(prevSnake[prevIndex], y);
         // A wrapped segment jumps across the arena: never lerp through the floor.
         if (std::fabs(cur.x - prev.x) <= 1.01f && std::fabs(cur.z - prev.z) <= 1.01f) {
             cur.x = prev.x + (cur.x - prev.x) * tickAlpha;
@@ -847,7 +877,7 @@ void Game::updateCamera(float dt) {
 
     // --- Heading used by the third-person orbit and by the iso/top look-ahead.
     Vector3 moveDir = dirToWorld(dir);
-    if (!snake.empty() && prevSnake.size() == snake.size()) {
+    if (!snake.empty() && !prevSnake.empty()) {
         int dx = snake.front().x - prevSnake.front().x;
         int dy = snake.front().y - prevSnake.front().y;
         if (dx > 1) {
@@ -991,7 +1021,9 @@ void Game::resolvePendingBites() {
         if (bite.special) {
             spawnParticles(bite.pos, kSpecial, 22, 5.5f, 0.18f, 0.6f);
             spawnParticles(bite.pos, kSpecialHalo, 12, 4.0f, 0.13f, 0.5f);
+            spawnParticles(bite.pos, bite.good ? kGood : kBad, 10, 4.8f, 0.14f, 0.55f);
             triggerShake(0.18f, 2.8f);
+            audio.play(bite.good ? SfxId::SpecialGood : SfxId::SpecialBad);
         } else {
             spawnParticles(bite.pos, kFood, 14, 4.5f, 0.16f, 0.45f);
             spawnParticles(bite.pos, Color{255, 230, 160, 255}, 6, 3.0f, 0.11f, 0.35f);
@@ -1127,10 +1159,10 @@ Vector2 Game::headGaze() const {
         }
         return Vector2{0.0f, 0.0f};
     }
-    if (hasBuffered && !isOpposite(buffered, dir) && buffered != dir) {
+    if (turnQueueCount > 0 && !isOpposite(turnQueue[0], dir) && turnQueue[0] != dir) {
         const Vector3 fwd = dirToWorld(dir);
         const Vector3 right{-fwd.z, 0.0f, fwd.x};
-        const Vector3 want = dirToWorld(buffered);
+        const Vector3 want = dirToWorld(turnQueue[0]);
         return Vector2{right.x * want.x + right.z * want.z, fwd.x * want.x + fwd.z * want.z};
     }
     return Vector2{0.0f, 0.0f};
@@ -1272,27 +1304,92 @@ void Game::applySettings() {
 
 void Game::persistSettings() { saveSettings(settings, "settings.cfg"); }
 
+// One fullscreen switch for F11, the menu button and the Setting row. raylib 5+ uses
+// borderless-windowed (no video-mode change, no flicker); older versions fall back
+// to ToggleFullscreen(). Leaving fullscreen only raises a flag: the window is
+// resized on the next frame (applyPendingWindowResize) because resizing in the
+// same frame as the switch often fails or flickers.
+void Game::toggleFullscreen() {
+    const bool wasFullscreen = isFullscreenNow();
+#if defined(RAYLIB_VERSION_MAJOR) && RAYLIB_VERSION_MAJOR >= 5
+    ToggleBorderlessWindowed();
+#else
+    ToggleFullscreen();
+#endif
+    // Mirror the real state, not the request.
+    settings.fullscreen = isFullscreenNow() ? 1 : 0;
+    if (wasFullscreen && !isFullscreenNow()) {
+        pendingWindowResize = true;
+    }
+    persistSettings();
+}
+
+// Runs at the start of a frame, one frame after the switch that requested it.
+void Game::applyPendingWindowResize() {
+    if (!pendingWindowResize) {
+        return;
+    }
+    pendingWindowResize = false;
+    if (isFullscreenNow()) {
+        return;
+    }
+    const int index = std::clamp(settings.resolution, 0, kResolutionCount - 1);
+    const int monitor = GetCurrentMonitor();
+    const int monitorW = GetMonitorWidth(monitor);
+    const int monitorH = GetMonitorHeight(monitor);
+    int w = kResolutions[index].w;
+    int h = kResolutions[index].h;
+    if (monitorW > 0 && monitorH > 0) {
+        w = std::min(w, monitorW); // never open a window larger than the monitor
+        h = std::min(h, monitorH);
+    }
+    SetWindowSize(w, h);
+    if (monitorW > 0 && monitorH > 0) {
+        const Vector2 origin = GetMonitorPosition(monitor);
+        SetWindowPosition(static_cast<int>(origin.x) + (monitorW - w) / 2,
+                          static_cast<int>(origin.y) + (monitorH - h) / 2);
+    }
+    appliedResolution = index;
+}
+
 // Window-level options cannot go through the canvas: apply them to the real window.
 void Game::applyWindowSettings() {
     const bool wantFullscreen = settings.fullscreen != 0;
-    if (IsWindowFullscreen() != wantFullscreen) {
-        ToggleFullscreen();
+    if (isFullscreenNow() != wantFullscreen) {
+        toggleFullscreen(); // also queues the resize when leaving fullscreen
+    } else {
+        settings.fullscreen = isFullscreenNow() ? 1 : 0;
     }
-    if (!wantFullscreen) {
-        const int index = std::clamp(settings.resolution, 0, kResolutionCount - 1);
-        SetWindowSize(kResolutions[index].w, kResolutions[index].h);
+    // A Resolution change only matters in windowed mode, and only when it really changed:
+    // otherwise unrelated settings (volume, camera...) would fight a manual window resize.
+    const int index = std::clamp(settings.resolution, 0, kResolutionCount - 1);
+    if (!isFullscreenNow() && index != appliedResolution) {
+        pendingWindowResize = true;
     }
     if (settings.vsync != 0) {
         SetWindowState(FLAG_VSYNC_HINT);
     } else {
         ClearWindowState(FLAG_VSYNC_HINT);
     }
-    SetTargetFPS(fpsTarget(settings.fpsLimit));
+    // VSync paces the frames by itself; a software limiter on top of it causes judder.
+    SetTargetFPS(settings.vsync != 0 ? 0 : fpsTarget(settings.fpsLimit));
 }
 
 void Game::gameOver() {
     over = true;
-    // A pending bite never lands if the round ends first: drop it silently.
+    clearTurnQueue();
+    // Points were already awarded for food still in the mouth: give its feedback
+    // (sound + floating text, no jaw animation) before the bites are dropped.
+    for (const PendingBite& bite : pendingBites) {
+        if (bite.special) {
+            audio.play(bite.good ? SfxId::SpecialGood : SfxId::SpecialBad);
+        } else {
+            audio.play(SfxId::EatFood);
+        }
+        addFloatingText(bite.label,
+                        Vector3{bite.pos.x, bite.pos.y + (bite.special ? 0.6f : 0.5f), bite.pos.z},
+                        bite.labelColor, bite.special ? 1.3f : 0.9f);
+    }
     pendingBites.clear();
     mouthTarget = 0.0f;
     mouthOpen = 0.0f;

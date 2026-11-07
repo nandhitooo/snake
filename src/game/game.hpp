@@ -92,6 +92,7 @@ struct PendingBite {
     Vector3 pos{0.0f, 0.0f, 0.0f};
     Color color{255, 255, 255, 255};
     bool special = false;
+    bool good = true;      // special food only: effectIsGood() of the effect it carried
     float progress = 0.0f; // 0..1, driven by tickAlpha
     std::string label;     // floating text fired when the bite lands
     Color labelColor{235, 238, 245, 255};
@@ -126,8 +127,19 @@ inline Vector3 dirToWorld(Dir d) {
     }
 }
 
+// True for real fullscreen and for borderless-windowed fullscreen (raylib >= 5).
+inline bool isFullscreenNow() { return IsWindowFullscreen() || IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE); }
+
+// Phase F1: all drawing code uses the virtual 960x540 space; the canvas texture is S
+// times larger and this puts the S scale back on the modelview matrix. Call it right
+// after BeginTextureMode and again after EVERY EndMode3D (which resets modelview).
+void applyUiScale(float scale);
+
 bool isOpposite(Dir a, Dir b);
 const char* effectName(Effect e);
+// Single source of truth for the special-food grouping (text colour, SFX, particles).
+// Good: Bonus, Slow, Trim, Cleanse. Bad: Haste, Grow, Curse.
+bool effectIsGood(Effect e);
 
 struct Game {
 
@@ -160,12 +172,13 @@ struct Game {
     bool uiBoostHeld = false;
     Cell food{0, 0};
     Dir dir = Dir::Right;
-    Dir buffered = Dir::Right;
-    bool hasBuffered = false; // at most one turn queued per tick
+    Dir turnQueue[kTurnQueueSlots]{}; // turns waiting for upcoming ticks (oldest first)
+    int turnQueueCount = 0;
     bool boostHeld = false;
     bool boostRequiresRelease = false; // SPACE/BOOST must be released after a round (re)starts
     bool paused = false;
     bool over = false;
+    bool won = false; // the round ended because the board is full
     bool animations = true; // decorative animation toggle (Phase 4: Settings)
     int hoverId = -1;        // audio: last hovered UI control, so hover SFX fires once
     bool wasBoosting = false; // audio: boost start/end edge detection
@@ -178,6 +191,9 @@ struct Game {
     bool quit = false;
     Mode mode = Mode::Menu;
     bool fsRequest = false;
+    float uiScale = 1.0f;             // canvas supersampling S, set by main each frame
+    bool pendingWindowResize = false; // apply the Resolution setting on the next frame
+    int appliedResolution = -1;       // last Resolution index pushed to the window
 
     // Persisted options + settings-screen state
     Settings settings;
@@ -219,6 +235,9 @@ struct Game {
     void reset();
     void startGame();
     bool takeFullscreenRequest();
+    void toggleFullscreen();          // F11, menu button and Setting all go through here
+    void applyPendingWindowResize();  // call once per frame, before toggles are handled
+    void clearTurnQueue();
     bool boostActive() const;
     float tickInterval() const;
     bool isSnake(const Cell& c) const;

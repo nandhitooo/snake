@@ -14,36 +14,121 @@
 // menu. Controls: WASD/arrows turn, hold SPACE for boost, R restarts after
 // game over. The bottom bar exposes clickable controls.
 
+#include "game/assets.hpp"
 #include "game/audio.hpp"
 #include "game/game.hpp"
+#include "ui/text.hpp"
+
+#include "rlgl.h"
 
 #include <algorithm>
+#include <cmath>
+#include <string>
 
 using namespace snake;
 
+namespace {
+
+bool shaderUsable(const Shader& shader) {
+#if RAYLIB_VERSION_MAJOR > 5 || (RAYLIB_VERSION_MAJOR == 5 && RAYLIB_VERSION_MINOR >= 5)
+    return IsShaderValid(shader);
+#else
+    return IsShaderReady(shader);
+#endif
+}
+
+// Phase F1: S = fitScale x quality, snapped to kRenderScaleStep and clamped.
+float computeRenderScale(int quality) {
+    const float fit = std::min(static_cast<float>(GetRenderWidth()) / static_cast<float>(kWinW),
+                               static_cast<float>(GetRenderHeight()) / static_cast<float>(kWinH));
+    float s = fit * renderQualityScale(quality);
+    s = std::round(s / kRenderScaleStep) * kRenderScaleStep;
+    s = std::clamp(s, kRenderScaleMin, kRenderScaleMax);
+    const float maxByTexture =
+        static_cast<float>(kRenderMaxTexSide) / static_cast<float>(std::max(kWinW, kWinH));
+    s = std::min(s, std::floor(maxByTexture / kRenderScaleStep) * kRenderScaleStep);
+    return std::max(s, kRenderScaleStep);
+}
+
+} // namespace
+
 int main() {
+    // VSync is more reliable as a creation-time flag than as a state change afterwards.
+    // FLAG_WINDOW_HIGHDPI is deliberately NOT set: it would break the mouse mapping.
+    const Settings boot = loadSettings("settings.cfg");
+    unsigned int flags = FLAG_WINDOW_RESIZABLE;
+    if (boot.vsync != 0) {
+        flags |= FLAG_VSYNC_HINT;
+    }
+    SetConfigFlags(flags);
     InitWindow(kWinW, kWinH, "Snake");
     SetExitKey(KEY_NULL); // ESC is handled by the game (menu/quit), not the window
-    SetTargetFPS(60);
+    // Once, for every BeginMode3D (game, skin preview, settings): see kClipNear/kClipFar.
+    rlSetClipPlanes(kClipNear, kClipFar);
+    SetTargetFPS(boot.vsync != 0 ? 0 : fpsTarget(boot.fpsLimit));
     audio.init(); // no device / no assets = silent, the game still runs
 
-    // Fixed-size virtual canvas, letterboxed to the real window (fullscreen too).
-    RenderTexture2D canvas = LoadRenderTexture(kWinW, kWinH);
-    SetTextureFilter(canvas.texture, TEXTURE_FILTER_BILINEAR);
+    // Virtual 960x540 canvas, rendered at S x that size and letterboxed to the window.
+    // The texture is recreated only when its target size changes (never per frame).
+    RenderTexture2D canvas{};
+    bool canvasValid = false;
+    int canvasPxW = 0;
+    int canvasPxH = 0;
+
+    // FXAA (Low/Medium quality). Any failure just disables it, silently.
+    Shader fxaa{};
+    bool fxaaReady = false;
+    int fxaaResLoc = -1;
+    {
+        const std::string path = resolveAssetPath("assets/shaders/fxaa.fs");
+        if (!path.empty()) {
+            SetTraceLogLevel(LOG_NONE);
+            fxaa = LoadShader(nullptr, path.c_str());
+            SetTraceLogLevel(LOG_INFO);
+            if (shaderUsable(fxaa)) {
+                fxaaResLoc = GetShaderLocation(fxaa, "resolution");
+                fxaaReady = fxaaResLoc >= 0;
+            }
+        }
+    }
 
     Game game;
     while (!game.quit && !WindowShouldClose()) {
         const float dt = GetFrameTime();
 
+        game.applyPendingWindowResize(); // requested by last frame's fullscreen switch
         if (IsKeyPressed(KEY_F11) || game.takeFullscreenRequest()) {
-            ToggleFullscreen();
-            // Keep the persisted option in sync with the F11 shortcut.
-            game.settings.fullscreen = IsWindowFullscreen() ? 1 : 0;
-            game.persistSettings();
+            game.toggleFullscreen();
         }
         if (game.windowSettingsDirty) {
             game.applyWindowSettings();
             game.windowSettingsDirty = false;
+        }
+
+        // Minimized (zero-sized) window: nothing to render, just keep polling events.
+        if (GetScreenWidth() <= 0 || GetScreenHeight() <= 0 || GetRenderWidth() <= 0 ||
+            GetRenderHeight() <= 0) {
+            PollInputEvents();
+            WaitTime(0.05);
+            continue;
+        }
+
+        const float renderS = computeRenderScale(game.settings.renderQuality);
+        const int texW = static_cast<int>(std::lround(static_cast<float>(kWinW) * renderS));
+        const int texH = static_cast<int>(std::lround(static_cast<float>(kWinH) * renderS));
+        if (!canvasValid || texW != canvasPxW || texH != canvasPxH) {
+            if (canvasValid) {
+                UnloadRenderTexture(canvas);
+            }
+            canvas = LoadRenderTexture(texW, texH);
+            SetTextureFilter(canvas.texture, TEXTURE_FILTER_BILINEAR);
+            canvasValid = canvas.id != 0;
+            canvasPxW = texW;
+            canvasPxH = texH;
+            if (fxaaReady) {
+                const float res[2] = {static_cast<float>(texW), static_cast<float>(texH)};
+                SetShaderValue(fxaa, fxaaResLoc, res, SHADER_UNIFORM_VEC2);
+            }
         }
 
         const float screenW = static_cast<float>(GetScreenWidth());
@@ -84,21 +169,39 @@ int main() {
         audio.update(wanted, duck, dt);
 
         BeginTextureMode(canvas);
+        game.uiScale = renderS;
+        applyUiScale(renderS);     // virtual 960x540 coordinates -> S x texture pixels
+        rlSetLineWidth(renderS);   // 1-px GL lines would otherwise get thinner with S
         game.draw();
         EndTextureMode();
+        rlSetLineWidth(1.0f);
 
+        const bool useFxaa = fxaaReady && game.settings.renderQuality <= 1;
         BeginDrawing();
         ClearBackground(BLACK);
+        if (useFxaa) {
+            BeginShaderMode(fxaa);
+        }
         DrawTexturePro(canvas.texture,
-                       Rectangle{0.0f, 0.0f, static_cast<float>(kWinW), -static_cast<float>(kWinH)},
+                       Rectangle{0.0f, 0.0f, static_cast<float>(canvasPxW),
+                                 -static_cast<float>(canvasPxH)},
                        Rectangle{offset.x, offset.y, static_cast<float>(kWinW) * scale,
                                  static_cast<float>(kWinH) * scale},
                        Vector2{0.0f, 0.0f}, 0.0f, WHITE);
+        if (useFxaa) {
+            EndShaderMode();
+        }
         EndDrawing();
     }
 
     audio.shutdown();
-    UnloadRenderTexture(canvas);
+    uiTextShutdown();
+    if (fxaaReady) {
+        UnloadShader(fxaa);
+    }
+    if (canvasValid) {
+        UnloadRenderTexture(canvas);
+    }
     CloseWindow();
     return 0;
 }

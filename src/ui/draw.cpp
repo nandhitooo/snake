@@ -1,6 +1,8 @@
 #include "game/game.hpp"
 #include "render/color.hpp"
+#include "ui/text.hpp"
 #include "render/snake_head.hpp"
+#include "render/translucent.hpp"
 #include "ui/layout.hpp"
 
 #include <cmath>
@@ -20,6 +22,8 @@ const char* settingName(int row) {
         return "VSYNC";
     case RowFps:
         return "FPS LIMIT";
+    case RowRenderQuality:
+        return "RENDER QUALITY";
     case RowSpeed:
         return "GAME SPEED";
     case RowCamera:
@@ -135,8 +139,8 @@ void Game::drawButton(const Rectangle& r, const char* label, bool enabled, bool 
         DrawTriangle(Vector2{ix - 1.5f, iy - 0.5f}, Vector2{ix + 4.0f, iy - 0.5f},
                      Vector2{ix - 2.0f, iy + 8.0f}, iconColor);
 
-        constexpr int fSize = 15;
-        DrawText(label, static_cast<int>(r.x + 28.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
+        const float fSize = uiTextFit(label, r.width - 28.0f - 8.0f, 15.0f);
+        uiText(label, r.x + 28.0f, cy - fSize * 0.5f, fSize,
                  textColor);
         return;
     }
@@ -148,8 +152,8 @@ void Game::drawButton(const Rectangle& r, const char* label, bool enabled, bool 
         DrawRectangleRounded(Rectangle{ix - 4.5f, iy - 6.5f, 3.2f, 13.0f}, 0.25f, 2, iconColor);
         DrawRectangleRounded(Rectangle{ix + 1.5f, iy - 6.5f, 3.2f, 13.0f}, 0.25f, 2, iconColor);
 
-        constexpr int fSize = 14;
-        DrawText(label, static_cast<int>(r.x + 27.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
+        const float fSize = uiTextFit(label, r.width - 27.0f - 8.0f, 14.0f);
+        uiText(label, r.x + 27.0f, cy - fSize * 0.5f, fSize,
                  textColor);
         return;
     }
@@ -160,8 +164,8 @@ void Game::drawButton(const Rectangle& r, const char* label, bool enabled, bool 
         DrawTriangle(Vector2{ix + 8.0f, cy}, Vector2{ix, cy - 6.0f}, Vector2{ix, cy + 6.0f},
                      iconColor);
 
-        constexpr int fSize = 13;
-        DrawText(label, static_cast<int>(r.x + 25.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
+        const float fSize = uiTextFit(label, r.width - 25.0f - 8.0f, 13.0f);
+        uiText(label, r.x + 25.0f, cy - fSize * 0.5f, fSize,
                  textColor);
         return;
     }
@@ -174,8 +178,8 @@ void Game::drawButton(const Rectangle& r, const char* label, bool enabled, bool 
         DrawTriangle(Vector2{ix + 4.0f, iy - 7.5f}, Vector2{ix + 7.5f, iy - 3.0f},
                      Vector2{ix + 1.0f, iy - 3.8f}, iconColor);
 
-        constexpr int fSize = 15;
-        DrawText(label, static_cast<int>(r.x + 30.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
+        const float fSize = uiTextFit(label, r.width - 30.0f - 8.0f, 15.0f);
+        uiText(label, r.x + 30.0f, cy - fSize * 0.5f, fSize,
                  textColor);
         return;
     }
@@ -187,45 +191,45 @@ void Game::drawButton(const Rectangle& r, const char* label, bool enabled, bool 
         DrawRing(Vector2{ix, iy + 1.0f}, 4.5f, 6.5f, 45.0f, 315.0f, 18, iconColor);
         DrawLineEx(Vector2{ix, iy - 6.5f}, Vector2{ix, iy}, 2.0f, iconColor);
 
-        constexpr int fSize = 15;
-        DrawText(label, static_cast<int>(r.x + 38.0f), static_cast<int>(cy - fSize * 0.5f), fSize,
+        const float fSize = uiTextFit(label, r.width - 38.0f - 8.0f, 15.0f);
+        uiText(label, r.x + 38.0f, cy - fSize * 0.5f, fSize,
                  textColor);
         return;
     }
 
     if (std::strcmp(label, "PLAY") == 0) {
         // Large Play button in menu with Play triangle
-        constexpr int fSize = 22;
-        const int tw = MeasureText(label, fSize);
+        const float fSize = uiTextFit(label, r.width - 48.0f, 22.0f);
+        const float tw = uiMeasure(label, fSize);
         const float startX = r.x + (r.width - tw - 24.0f) * 0.5f;
 
         // Play triangle icon
         DrawTriangle(Vector2{startX + 14.0f, cy}, Vector2{startX, cy - 8.0f},
                      Vector2{startX, cy + 8.0f}, iconColor);
-        DrawText(label, static_cast<int>(startX + 24.0f), static_cast<int>(cy - fSize * 0.5f),
+        uiText(label, static_cast<int>(startX + 24.0f), static_cast<int>(cy - fSize * 0.5f),
                  fSize, textColor);
         return;
     }
 
     if (std::strncmp(label, "FULLSCREEN", 10) == 0) {
         // Screen icon
-        constexpr int fSize = 18;
-        const int tw = MeasureText(label, fSize);
+        const float fSize = uiTextFit(label, r.width - 44.0f, 18.0f);
+        const float tw = uiMeasure(label, fSize);
         const float startX = r.x + (r.width - tw - 26.0f) * 0.5f;
         const float ix = startX + 8.0f;
         const Rectangle sRect{ix - 8.0f, cy - 6.0f, 16.0f, 12.0f};
         DrawRectangleLinesEx(sRect, 1.8f, iconColor);
         DrawLineEx(Vector2{ix - 3.5f, cy + 8.0f}, Vector2{ix + 3.5f, cy + 8.0f}, 1.8f, iconColor);
 
-        DrawText(label, static_cast<int>(startX + 26.0f), static_cast<int>(cy - fSize * 0.5f),
+        uiText(label, static_cast<int>(startX + 26.0f), static_cast<int>(cy - fSize * 0.5f),
                  fSize, textColor);
         return;
     }
 
     // Default text rendering
-    constexpr int fontSize = 20;
-    const int textW = MeasureText(label, fontSize);
-    DrawText(label, static_cast<int>(r.x + (r.width - static_cast<float>(textW)) * 0.5f),
+    const float fontSize = uiTextFit(label, r.width - 16.0f, 20.0f);
+    const float textW = uiMeasure(label, fontSize);
+    uiText(label, static_cast<int>(r.x + (r.width - static_cast<float>(textW)) * 0.5f),
              static_cast<int>(r.y + (r.height - static_cast<float>(fontSize)) * 0.5f), fontSize,
              textColor);
 }
@@ -255,26 +259,28 @@ void Game::drawMenu() const {
     // Title "SNAKE" with multi-layered glow
     const char* title = "SNAKE";
     constexpr int titleSize = 88;
-    const int titleW = MeasureText(title, titleSize);
+    const int titleW = uiMeasure(title, titleSize);
     const int titleX = (kWinW - titleW) / 2;
 
     // Outer glow / shadow layers
-    DrawText(title, titleX + 4, 58, titleSize, Color{18, 55, 42, 255});
-    DrawText(title, titleX + 2, 56, titleSize, Color{35, 120, 80, 200});
+    uiText(title, titleX + 4, 58, titleSize, Color{18, 55, 42, 255});
+    uiText(title, titleX + 2, 56, titleSize, Color{35, 120, 80, 200});
     // Crisp foreground text
-    DrawText(title, titleX, 54, titleSize, kSnakeHead);
+    uiText(title, titleX, 54, titleSize, kSnakeHead);
 
     // Modern pill badge for edition
     {
-        const char* subtitle = "★ RAYLIB EDITION ★";
+        const char* subtitle = "RAYLIB EDITION";
         constexpr int subSize = 13;
-        const int subW = MeasureText(subtitle, subSize);
-        const Rectangle subPill{static_cast<float>(kWinW - subW - 30) * 0.5f, 150.0f,
-                                static_cast<float>(subW + 30), 22.0f};
+        const float subW = uiMeasure(subtitle, subSize);
+        const Rectangle subPill{(static_cast<float>(kWinW) - subW - 56.0f) * 0.5f, 150.0f,
+                                subW + 56.0f, 22.0f};
         DrawRectangleRounded(subPill, 0.5f, 6, Color{22, 28, 42, 240});
         DrawRectangleRoundedLinesEx(subPill, 0.5f, 6, 1.2f, Color{70, 130, 200, 220});
-        DrawText(subtitle, static_cast<int>(subPill.x + 15), static_cast<int>(subPill.y + 5),
-                 subSize, Color{140, 210, 255, 255});
+        const Color subColor{140, 210, 255, 255};
+        drawStar(subPill.x + 15.0f, subPill.y + 11.0f, 5.0f, subColor);
+        drawStar(subPill.x + subPill.width - 15.0f, subPill.y + 11.0f, 5.0f, subColor);
+        uiText(subtitle, subPill.x + 28.0f, subPill.y + 5.0f, subSize, subColor);
     }
 
     // ==========================================
@@ -375,7 +381,7 @@ void Game::drawMenu() const {
     }
 
     // Menu Buttons
-    const bool fs = IsWindowFullscreen();
+    const bool fs = isFullscreenNow();
     drawButton(ui::menuPlayRect(), "PLAY", true, false,
                CheckCollisionPointRec(uiMouse, ui::menuPlayRect()));
     drawButton(ui::menuSkinsRect(), "SKINS", true, false,
@@ -389,22 +395,23 @@ void Game::drawMenu() const {
 
     // Session High Score Card (top-right so it never collides with the buttons)
     if (highScore > 0) {
-        const std::string best = "★ SESSION BEST: " + std::to_string(highScore) + " ★";
+        const std::string best = "SESSION BEST: " + std::to_string(highScore);
         constexpr int bestSize = 13;
-        const int bestW = MeasureText(best.c_str(), bestSize);
-        const Rectangle bCard{static_cast<float>(kWinW - bestW - 46), 16.0f,
-                              static_cast<float>(bestW + 30), 26.0f};
+        const float bestW = uiMeasure(best.c_str(), bestSize);
+        const Rectangle bCard{static_cast<float>(kWinW) - bestW - 76.0f, 16.0f, bestW + 60.0f,
+                              26.0f};
         DrawRectangleRounded(bCard, 0.4f, 6, Color{32, 28, 16, 230});
         DrawRectangleRoundedLinesEx(bCard, 0.4f, 6, 1.2f, kGold);
-        DrawText(best.c_str(), static_cast<int>(bCard.x + 15), static_cast<int>(bCard.y + 6),
-                 bestSize, kGold);
+        drawStar(bCard.x + 15.0f, bCard.y + 13.0f, 5.5f, kGold);
+        drawStar(bCard.x + bCard.width - 15.0f, bCard.y + 13.0f, 5.5f, kGold);
+        uiText(best.c_str(), bCard.x + 28.0f, bCard.y + 6.0f, bestSize, kGold);
     }
 
     // Keyboard navigation hints
     const char* hint = "ENTER / PLAY to start  |  F11 fullscreen  |  ESC quit";
     constexpr int hintSize = 13;
-    const int hintW = MeasureText(hint, hintSize);
-    DrawText(hint, (kWinW - hintW) / 2, 505, hintSize, Color{125, 132, 148, 255});
+    const int hintW = uiMeasure(hint, hintSize);
+    uiText(hint, (kWinW - hintW) / 2, 505, hintSize, Color{125, 132, 148, 255});
 }
 
 void Game::drawSettings() const {
@@ -418,9 +425,9 @@ void Game::drawSettings() const {
 
     const char* title = "SETTINGS";
     constexpr int titleSize = 40;
-    const int titleW = MeasureText(title, titleSize);
-    DrawText(title, (kWinW - titleW) / 2 + 2, 42, titleSize, Color{28, 62, 48, 255});
-    DrawText(title, (kWinW - titleW) / 2, 40, titleSize, kSnakeHead);
+    const int titleW = uiMeasure(title, titleSize);
+    uiText(title, (kWinW - titleW) / 2 + 2, 42, titleSize, Color{28, 62, 48, 255});
+    uiText(title, (kWinW - titleW) / 2, 40, titleSize, kSnakeHead);
 
     const Rectangle card{160.0f, 94.0f, 640.0f, 344.0f};
     DrawRectangleRounded(card, 0.06f, 10, Color{22, 25, 36, 242});
@@ -441,22 +448,23 @@ void Game::drawSettings() const {
             DrawRectangleRoundedLinesEx(row, 0.35f, 6, 1.4f, kCyan);
         }
 
-        DrawText(settingName(i), static_cast<int>(row.x + 14), static_cast<int>(row.y + 4), 12,
-                 selected ? kText : Color{180, 190, 210, 255});
-
-        const std::string value = settingLabel(settings, i);
         const float zoneL = row.x + row.width - 200.0f;
         const float zoneR = row.x + row.width - 36.0f;
-        const int valueW = MeasureText(value.c_str(), 12);
+        const char* name = settingName(i);
+        const float nameSize = uiTextFit(name, zoneL - (row.x + 14.0f) - 8.0f, 12.0f);
+        uiText(name, row.x + 14.0f, row.y + 4.0f, nameSize,
+               selected ? kText : Color{180, 190, 210, 255});
+
+        const std::string value = settingLabel(settings, i);
+        const float valueSize = uiTextFit(value.c_str(), zoneR - zoneL - 24.0f, 12.0f);
+        const float valueW = uiMeasure(value.c_str(), valueSize);
         if (i != RowReset) {
-            DrawText("<", static_cast<int>(zoneL), static_cast<int>(row.y + 3), 13,
+            uiText("<", static_cast<int>(zoneL), static_cast<int>(row.y + 3), 13,
                      selected ? kCyan : Color{110, 120, 140, 255});
-            DrawText(">", static_cast<int>(zoneR), static_cast<int>(row.y + 3), 13,
+            uiText(">", static_cast<int>(zoneR), static_cast<int>(row.y + 3), 13,
                      selected ? kCyan : Color{110, 120, 140, 255});
         }
-        DrawText(value.c_str(),
-                 static_cast<int>((zoneL + zoneR) * 0.5f - static_cast<float>(valueW) * 0.5f),
-                 static_cast<int>(row.y + 4), 12,
+        uiText(value.c_str(), (zoneL + zoneR) * 0.5f - valueW * 0.5f, row.y + 4.0f, valueSize,
                  selected ? kGold : Color{150, 200, 225, 255});
     }
 
@@ -465,8 +473,8 @@ void Game::drawSettings() const {
 
     const char* hint = "UP/DOWN select  |  LEFT/RIGHT change  |  M mute  |  ESC back";
     constexpr int hintSize = 12;
-    const int hintW = MeasureText(hint, hintSize);
-    DrawText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});
+    const int hintW = uiMeasure(hint, hintSize);
+    uiText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});
 }
 
 void Game::drawSkins() const {
@@ -486,6 +494,7 @@ void Game::drawSkins() const {
     cam.projection = CAMERA_PERSPECTIVE;
 
     constexpr size_t previewCount = 9;
+    render::TranslucentQueue translucent; // glow shells go in the second pass
     BeginMode3D(cam);
     DrawCubeV(Vector3{0.0f, -0.3f, 0.0f}, Vector3{5.6f, 0.6f, 5.6f}, Color{20, 24, 34, 255});
     DrawCubeWiresV(Vector3{0.0f, -0.3f, 0.0f}, Vector3{5.6f, 0.6f, 5.6f}, Color{50, 58, 78, 255});
@@ -498,7 +507,8 @@ void Game::drawSkins() const {
         const Color col = snakeColorAt(i, previewCount);
 
         if (sk.trail == TrailKind::Glow) {
-            DrawSphereEx(p, 0.58f, 6, 8, render::withAlpha(sk.accent, 34));
+            const Color glow = render::withAlpha(sk.accent, 34);
+            translucent.add(p, [p, glow] { DrawSphereEx(p, 0.58f, kEyeRings, kEyeSlices, glow); });
         }
 
         if (i + 1 == previewCount) {
@@ -521,19 +531,21 @@ void Game::drawSkins() const {
             if (sk.shape == SegmentShape::Cube && (i % 2) == 1) {
                 seg = render::tint(col, kHeadCubeTint);
             }
-            DrawSphereEx(p, r, 8, 10, seg);
+            DrawSphereEx(p, r, kBodyRings, kBodySlices, seg);
         }
     }
+    translucent.flush(cam.position);
     EndMode3D();
+    applyUiScale(uiScale);
 
     const char* title = "SKINS";
     constexpr int titleSize = 36;
-    const int titleW = MeasureText(title, titleSize);
-    DrawText(title, (kWinW - titleW) / 2 + 2, 26, titleSize, Color{28, 62, 48, 255});
-    DrawText(title, (kWinW - titleW) / 2, 24, titleSize, kSnakeHead);
+    const int titleW = uiMeasure(title, titleSize);
+    uiText(title, (kWinW - titleW) / 2 + 2, 26, titleSize, Color{28, 62, 48, 255});
+    uiText(title, (kWinW - titleW) / 2, 24, titleSize, kSnakeHead);
 
-    const int nameW = MeasureText(sk.name, 20);
-    DrawText(sk.name, (kWinW - nameW) / 2, 318, 20, kGold);
+    const int nameW = uiMeasure(sk.name, 20);
+    uiText(sk.name, (kWinW - nameW) / 2, 318, 20, kGold);
 
     for (int i = 0; i < kSkinCount; ++i) {
         const Rectangle skinCard = ui::skinCardRect(i);
@@ -549,9 +561,10 @@ void Game::drawSkins() const {
         DrawRectangleRoundedLinesEx(skinCard, 0.16f, 8, selected ? 2.0f : 1.2f,
                                     selected ? kGold : Color{55, 62, 82, 255});
 
-        const int labelW = MeasureText(kSkins[i].name, 11);
-        DrawText(kSkins[i].name, static_cast<int>(skinCard.x + (skinCard.width - labelW) * 0.5f),
-                 static_cast<int>(skinCard.y + 8), 11,
+        const float labelSize = uiTextFit(kSkins[i].name, skinCard.width - 8.0f, 11.0f);
+        const float labelW = uiMeasure(kSkins[i].name, labelSize);
+        uiText(kSkins[i].name, skinCard.x + (skinCard.width - labelW) * 0.5f, skinCard.y + 8.0f,
+               labelSize,
                  selected ? kText : Color{175, 185, 205, 255});
 
         const float swatchY = skinCard.y + skinCard.height - 22.0f;
@@ -566,8 +579,8 @@ void Game::drawSkins() const {
 
     const char* hint = "LEFT/RIGHT or click a card to equip  |  ENTER/ESC back";
     constexpr int hintSize = 12;
-    const int hintW = MeasureText(hint, hintSize);
-    DrawText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});
+    const int hintW = uiMeasure(hint, hintSize);
+    uiText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});
 }
 
 } // namespace snake

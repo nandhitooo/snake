@@ -29,6 +29,7 @@ inline constexpr int kMaxObstacles = 15;
 inline constexpr float kObstacleLife = 12.0f; // solid obstacles expire after this long
 inline constexpr float kObstacleFade = 1.5f;  // fade-out window before they vanish
 inline constexpr int kMinLength = 3;
+inline constexpr int kTurnQueueSlots = 2; // turns that may wait for the next logic ticks
 
 // Special-food effects (beneficial or harmful, picked at random)
 inline constexpr float kEffectDuration = 5.0f; // timed slow/haste length
@@ -137,6 +138,38 @@ inline constexpr float kHeadSmileThick = 0.016f;
 inline constexpr Color kHeadSmile{42, 32, 38, 255};
 inline constexpr float kHeadTongueFwd = 0.55f;
 inline constexpr float kHeadTongueDrop = 0.14f;
+
+// Floor decals and depth (Phase E). Every flat decal sits at its own fixed height above
+// the floor plane (y = 0), in this order: grid < shadow < warning < AI spawn marker.
+inline constexpr float kLayerGrid = 0.02f;
+inline constexpr float kLayerShadow = 0.035f;
+inline constexpr float kLayerWarning = 0.05f;
+inline constexpr float kLayerAiSpawn = 0.06f;
+inline constexpr float kFloorSlabCenterY = -0.37f; // slab top = centre + 0.35 = -0.02 (below the floor)
+inline constexpr float kFloorSlabHeight = 0.7f;
+inline constexpr double kClipNear = 0.3;   // raylib default 0.01 starves the 24-bit depth buffer
+inline constexpr double kClipFar = 100.0;  // farthest camera-to-floor distance is about 52 units
+
+// Primitive smoothness (Phase E4): rings x slices for DrawSphereEx, sides for cylinders.
+inline constexpr int kHeadRings = 20;
+inline constexpr int kHeadSlices = 24;
+inline constexpr int kBodyRings = 14;
+inline constexpr int kBodySlices = 18;
+inline constexpr int kEyeRings = 12;
+inline constexpr int kEyeSlices = 14;
+inline constexpr int kFoodRings = 16;
+inline constexpr int kFoodSlices = 20;
+inline constexpr int kLinkSides = 12;
+
+// Render scale / supersampling (Phase F1). The canvas texture is
+// (kWinW x S, kWinH x S) with S = fitScale x quality, snapped to kRenderScaleStep.
+inline constexpr float kRenderScaleLow = 1.0f;    // Render Quality: LOW
+inline constexpr float kRenderScaleMedium = 1.5f; // Render Quality: MEDIUM (default)
+inline constexpr float kRenderScaleHigh = 2.0f;   // Render Quality: HIGH
+inline constexpr float kRenderScaleStep = 0.25f;
+inline constexpr float kRenderScaleMin = 1.0f;
+inline constexpr float kRenderScaleMax = 3.0f;
+inline constexpr int kRenderMaxTexSide = 4096;    // longest texture side, in pixels
 
 // Palette
 inline const Color kBg{14, 14, 20, 255};

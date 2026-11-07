@@ -119,6 +119,8 @@ void trySpawnAi(Game& g, const Cell& at, size_t length) {
         ai.prevBody = body;
         ai.dir = d;
         ai.spawnT = g.animations ? 0.0f : 1.0f;
+        std::uniform_real_distribution<float> phaseDist(0.0f, kAiBlinkPeriod);
+        ai.blinkPhase = phaseDist(g.rng); // rivals blink out of sync
         g.ai.push_back(ai);
         audio.play(SfxId::AiSpawn);
         return;

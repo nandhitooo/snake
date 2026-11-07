@@ -52,8 +52,9 @@ struct AiSnake {
     std::deque<Cell> body;     // front == head
     std::deque<Cell> prevBody; // for render interpolation
     Dir dir = Dir::Left;
-    float spawnT = 0.0f; // 0..1 pop-in
-    float deathT = 0.0f; // 0..1 fade-out while dying
+    float spawnT = 0.0f;     // 0..1 pop-in
+    float deathT = 0.0f;     // 0..1 fade-out while dying
+    float blinkPhase = 0.0f; // random offset so rivals do not blink in sync
     bool dying = false;
 };
 
@@ -210,6 +211,9 @@ struct Game {
     float mouthTarget = 0.0f; // 0..1 wanted jaw opening for this frame
     float biteT = -1.0f;      // seconds since the last bite, <0 == idle
     float mouthLock = 0.0f;   // short cooldown after a bite, in seconds
+    float blinkT = -1.0f;     // seconds into the current blink, <0 == eyes open
+    float nextBlinkIn = 2.5f; // countdown to the next blink
+    int blinkExtra = 0;       // extra blinks queued (double blink)
 
     Game();
     void reset();
@@ -243,6 +247,9 @@ struct Game {
     void updateVfx(float dt);
     void updateCamera(float dt);
     void updateMouth(float dt);
+    void updateBlink(float dt);
+    float blinkProgress() const; // 0 = open, 1 = fully closed
+    bool eyesHappy() const;      // "^ ^" after a bite
     void resolvePendingBites();
     void triggerBite();
     float mouthTargetDistance() const;

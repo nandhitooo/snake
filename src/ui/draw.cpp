@@ -316,17 +316,24 @@ void Game::drawMenu() const {
                 // Head segment with expressive eyes
                 DrawCircle(static_cast<int>(sx), static_cast<int>(sy), 11.0f, segCol);
 
-                // Cute eyes looking right towards the food
-                DrawCircle(static_cast<int>(sx + 3.0f), static_cast<int>(sy - 4.5f), 3.2f,
-                           Color{242, 246, 252, 255});
-                DrawCircle(static_cast<int>(sx + 3.0f), static_cast<int>(sy + 4.5f), 3.2f,
-                           Color{242, 246, 252, 255});
-                DrawCircle(static_cast<int>(sx + 4.0f), static_cast<int>(sy - 4.5f), 1.8f,
-                           Color{20, 24, 30, 255});
-                DrawCircle(static_cast<int>(sx + 4.0f), static_cast<int>(sy + 4.5f), 1.8f,
-                           Color{20, 24, 30, 255});
-                DrawCircle(static_cast<int>(sx + 4.6f), static_cast<int>(sy - 5.2f), 0.8f, WHITE);
-                DrawCircle(static_cast<int>(sx + 4.6f), static_cast<int>(sy + 3.8f), 0.8f, WHITE);
+                // Cute eyes looking right towards the food (shared blink timer)
+                const float motifBlink = blinkProgress();
+                if (motifBlink > 0.7f) {
+                    const Color lid{20, 24, 30, 255};
+                    DrawLineEx(Vector2{sx + 1.0f, sy - 4.5f}, Vector2{sx + 6.4f, sy - 4.5f}, 1.6f, lid);
+                    DrawLineEx(Vector2{sx + 1.0f, sy + 4.5f}, Vector2{sx + 6.4f, sy + 4.5f}, 1.6f, lid);
+                } else {
+                    DrawCircle(static_cast<int>(sx + 3.0f), static_cast<int>(sy - 4.5f), 3.2f,
+                               Color{242, 246, 252, 255});
+                    DrawCircle(static_cast<int>(sx + 3.0f), static_cast<int>(sy + 4.5f), 3.2f,
+                               Color{242, 246, 252, 255});
+                    DrawCircle(static_cast<int>(sx + 4.0f), static_cast<int>(sy - 4.5f), 1.8f,
+                               Color{20, 24, 30, 255});
+                    DrawCircle(static_cast<int>(sx + 4.0f), static_cast<int>(sy + 4.5f), 1.8f,
+                               Color{20, 24, 30, 255});
+                    DrawCircle(static_cast<int>(sx + 4.6f), static_cast<int>(sy - 5.2f), 0.8f, WHITE);
+                    DrawCircle(static_cast<int>(sx + 4.6f), static_cast<int>(sy + 3.8f), 0.8f, WHITE);
+                }
 
                 // Animated flicking red tongue
                 const float tCycle = std::fmod(animTime, 2.2f);
@@ -504,6 +511,7 @@ void Game::drawSkins() const {
             pose.head = headColor();
             pose.eye = eyeColor();
             pose.crown = sk.crown;
+            pose.blink = blinkProgress();
             drawSnakeHead(pose);
         } else {
             // Same chibi taper as gameplay: round segments, banded for Cube skins.

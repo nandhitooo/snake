@@ -16,6 +16,19 @@ Vector3 vadd(Vector3 a, Vector3 b) { return Vector3{a.x + b.x, a.y + b.y, a.z + 
 
 Vector3 vmul(Vector3 a, float s) { return Vector3{a.x * s, a.y * s, a.z * s}; }
 
+// Same blink curve as the player, driven by a free-running clock so each rival
+// can be phase-shifted instead of sharing the player's timer.
+float blinkAt(float t, float period) {
+    const float c = std::fmod(t, period);
+    if (c < 0.0f || c >= kBlinkDuration) {
+        return 0.0f;
+    }
+    if (c < kBlinkCloseTime) {
+        return c / kBlinkCloseTime;
+    }
+    return 1.0f - (c - kBlinkCloseTime) / std::max(1e-4f, kBlinkDuration - kBlinkCloseTime);
+}
+
 Vector3 vnorm(Vector3 v) {
     const float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
     if (len < 1e-6f) {
@@ -292,12 +305,15 @@ void drawHeadEyes(const HeadPose& p) {
             vadd(p.pos, vadd(vmul(fwd, kHeadEyeFwd * s),
                              vadd(vmul(right, kHeadEyeSpread * s * static_cast<float>(side)),
                                   vmul(up, kHeadEyeHeight * s))));
+        // The eye centre sits inside the skull: strokes that replace the eyeball
+        // (happy carets, closed lash) have to be pushed onto its front surface.
+        const Vector3 facePush = vmul(fwd, kHeadEyeWhite * 0.85f * s);
 
         if (p.happy) {
             const float half = kHeadEyeWhite * s * 0.75f;
-            const Vector3 a = vadd(eye, vmul(right, -half));
-            const Vector3 b = vadd(eye, vmul(up, half * 0.9f));
-            const Vector3 c = vadd(eye, vmul(right, half));
+            const Vector3 a = vadd(vadd(eye, facePush), vmul(right, -half));
+            const Vector3 b = vadd(vadd(eye, facePush), vmul(up, half * 0.9f));
+            const Vector3 c = vadd(vadd(eye, facePush), vmul(right, half));
             DrawCylinderEx(a, b, kHeadEyeHappyThick * s, kHeadEyeHappyThick * s, 5, p.eye);
             DrawCylinderEx(b, c, kHeadEyeHappyThick * s, kHeadEyeHappyThick * s, 5, p.eye);
             continue;
@@ -320,8 +336,8 @@ void drawHeadEyes(const HeadPose& p) {
 
         // A closed eye still needs a crisp lash line once it is nearly shut.
         if (blink > 0.7f) {
-            const Vector3 a = vadd(eye, vmul(right, -kHeadBlinkLine * s));
-            const Vector3 b = vadd(eye, vmul(right, kHeadBlinkLine * s));
+            const Vector3 a = vadd(vadd(eye, facePush), vmul(right, -kHeadBlinkLine * s));
+            const Vector3 b = vadd(vadd(eye, facePush), vmul(right, kHeadBlinkLine * s));
             DrawCylinderEx(a, b, kHeadBlinkThick * s, kHeadBlinkThick * s, 5, p.eye);
         }
     }
@@ -532,6 +548,8 @@ void drawSnakeBody(const Game& g) {
             const Vector2 gaze = g.headGaze();
             pose.gazeRight = gaze.x;
             pose.gazeFwd = gaze.y;
+            pose.blink = g.blinkProgress();
+            pose.happy = g.eyesHappy();
             drawSnakeHeadBody(pose);
         } else {
             // Every skin is round now; Cube skins keep their identity with an
@@ -613,8 +631,21 @@ void drawAiSnakes(const Game& g) {
             const Color col = render::lerpColor(rivalBody, rivalTail, t);
 
             if (i == 0) {
-                DrawSphereEx(Vector3{p.x, p.y + 0.05f, p.z}, 0.44f * scale, 8, 10, rivalBody);
-                DrawSphereWires(Vector3{p.x, p.y + 0.05f, p.z}, 0.47f * scale, 6, 8, hint);
+                const Vector3 headPos{p.x, p.y + 0.05f, p.z};
+                DrawSphereEx(headPos, 0.44f * scale, 8, 10, rivalBody);
+                DrawSphereWires(headPos, 0.47f * scale, 6, 8, hint);
+
+                // Same eyes as the player, scaled down and blinking out of phase.
+                HeadPose face;
+                face.pos = headPos;
+                face.fwd = dirToWorld(ai.dir);
+                face.scale = 0.8f * scale;
+                face.head = rivalBody;
+                face.eye = Color{34, 22, 52, 255};
+                face.animate = g.animations;
+                face.blink =
+                    g.animations ? blinkAt(g.animTime + ai.blinkPhase, kAiBlinkPeriod) : 0.0f;
+                drawHeadEyes(face);
             } else {
                 DrawCubeV(p, Vector3{0.74f * scale, 0.6f * scale, 0.74f * scale}, col);
                 DrawCubeWiresV(p, Vector3{0.78f * scale, 0.64f * scale, 0.78f * scale}, hint);

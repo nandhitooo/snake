@@ -110,6 +110,16 @@ inline constexpr float kHeadWaveAmp = 0.07f;   // body wave height
 inline constexpr float kHeadTailWag = 0.08f;   // lateral tip sway
 inline constexpr float kHeadCubeTint = 0.84f;  // alternating band for Cube skins
 
+// Blinking / expressions (Phase C3).
+inline constexpr float kBlinkDuration = 0.14f;   // whole blink, seconds
+inline constexpr float kBlinkCloseTime = 0.05f;  // closing is faster than opening
+inline constexpr float kBlinkMinGap = 2.0f;      // shortest idle gap between blinks
+inline constexpr float kBlinkMaxGap = 5.0f;      // longest idle gap between blinks
+inline constexpr float kBlinkDoubleChance = 0.2f;
+inline constexpr float kBlinkDoubleGap = 0.08f;  // pause inside a double blink
+inline constexpr float kHappyTime = 0.5f;        // "^ ^" eyes after a bite
+inline constexpr float kAiBlinkPeriod = 4.0f;    // rival blink period (phase-shifted)
+
 // Face details.
 inline constexpr float kHeadBlushFwd = 0.36f;
 inline constexpr float kHeadBlushSpread = 0.4f;

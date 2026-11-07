@@ -144,6 +144,9 @@ void Game::reset() {
     mouthTarget = 0.0f;
     biteT = kMouthBiteIdle;
     mouthLock = 0.0f;
+    blinkT = -1.0f;
+    blinkExtra = 0;
+    nextBlinkIn = 2.5f;
     camYaw = 0.0f;
     camBlend = 0.0f;
     camAppliedMode = cameraMode;
@@ -635,6 +638,7 @@ void Game::togglePause() {
 
 void Game::updateVfx(float dt) {
     animTime += dt;
+    updateBlink(dt);
 
     for (Particle& p : ambientParticles) {
         p.pos.x += p.vel.x * dt;
@@ -1132,6 +1136,54 @@ Vector2 Game::headGaze() const {
     return Vector2{0.0f, 0.0f};
 }
 
+// Eyes are happy for a moment after a bite: no normal blinking meanwhile.
+bool Game::eyesHappy() const { return animations && biteT >= 0.0f && biteT < kHappyTime; }
+
+// 0 = open, 1 = fully closed. Closing is quicker than opening.
+float Game::blinkProgress() const {
+    if (!animations || blinkT < 0.0f) {
+        return 0.0f;
+    }
+    if (blinkT < kBlinkCloseTime) {
+        return std::clamp(blinkT / kBlinkCloseTime, 0.0f, 1.0f);
+    }
+    const float openSpan = std::max(1e-4f, kBlinkDuration - kBlinkCloseTime);
+    return std::clamp(1.0f - (blinkT - kBlinkCloseTime) / openSpan, 0.0f, 1.0f);
+}
+
+// Random blinking on the game's own RNG: a 2-5 s gap, 20% double blinks.
+void Game::updateBlink(float dt) {
+    if (!animations || over) {
+        blinkT = -1.0f;
+        blinkExtra = 0;
+        return;
+    }
+    if (blinkT >= 0.0f) {
+        blinkT += dt;
+        if (blinkT >= kBlinkDuration) {
+            blinkT = -1.0f;
+            if (blinkExtra > 0) {
+                --blinkExtra;
+                nextBlinkIn = kBlinkDoubleGap;
+            }
+        }
+        return;
+    }
+    if (eyesHappy()) {
+        nextBlinkIn = kBlinkMinGap; // hold the blink off until the grin fades
+        return;
+    }
+    nextBlinkIn -= dt;
+    if (nextBlinkIn > 0.0f) {
+        return;
+    }
+    blinkT = 0.0f;
+    std::uniform_real_distribution<float> gap(kBlinkMinGap, kBlinkMaxGap);
+    nextBlinkIn = gap(rng);
+    std::uniform_real_distribution<float> roll(0.0f, 1.0f);
+    blinkExtra = (roll(rng) < kBlinkDoubleChance) ? 1 : 0;
+}
+
 // Per-frame jaw animation: open when food is close ahead, snap shut on the bite.
 void Game::updateMouth(float dt) {
     dt = std::clamp(dt, 0.0f, kCamMaxDt);
@@ -1246,6 +1298,8 @@ void Game::gameOver() {
     mouthOpen = 0.0f;
     biteT = kMouthBiteIdle;
     mouthLock = 0.0f;
+    blinkT = -1.0f; // eyes stay open on the game-over screen
+    blinkExtra = 0;
     audio.play(SfxId::GameOver);
     boostHeld = false;
     paused = false;

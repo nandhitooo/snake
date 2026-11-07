@@ -15,6 +15,7 @@ void Game::handleInput() {
             paused = false;
             boostHeld = false;
             uiBoostHeld = false;
+            transitionT = animations ? 1.0f : 0.0f;
         }
         return;
     }

@@ -83,39 +83,54 @@ void drawArenaFloor() {
 
 void drawApple(const Game& g) {
     const Vector3 base = cellToWorld(g.food, 0.0f);
-    const float bob = 0.06f * std::sin(g.animTime * 4.5f);
-    const Vector3 c{base.x, 0.55f + bob, base.z};
+    const float bob = g.animations ? 0.06f * std::sin(g.animTime * 4.5f) : 0.0f;
+
+    // Pop-in: quick overshoot that settles in ~0.25 s.
+    float pop = 1.0f;
+    if (g.animations) {
+        const float x = std::clamp(g.foodAge / 0.25f, 0.0f, 1.0f);
+        pop = 1.0f + 0.45f * std::sin(x * 3.141593f) * (1.0f - x);
+    }
+    const Vector3 c{base.x, 0.55f * pop + bob, base.z};
 
     // Contact shadow keeps the apple visually grounded.
     DrawPlane(Vector3{base.x, 0.015f, base.z}, Vector2{0.7f, 0.7f}, Color{0, 0, 0, 70});
 
-    DrawSphereEx(c, 0.4f, 10, 12, kFood);
-    DrawSphereEx(vadd(c, Vector3{-0.13f, 0.14f, 0.12f}), 0.085f, 6, 8, Color{255, 168, 168, 230});
-    DrawCylinder(Vector3{c.x, c.y + 0.34f, c.z}, 0.035f, 0.05f, 0.22f, 6, kFoodStem);
+    DrawSphereEx(c, 0.4f * pop, 10, 12, kFood);
+    DrawSphereEx(vadd(c, vmul(Vector3{-0.13f, 0.14f, 0.12f}, pop)), 0.085f * pop, 6, 8,
+                 Color{255, 168, 168, 230});
+    DrawCylinder(Vector3{c.x, c.y + 0.34f * pop, c.z}, 0.035f, 0.05f, 0.22f * pop, 6, kFoodStem);
 
-    const float ang = g.animTime * 1.9f;
-    const Vector3 leaf{c.x + std::cos(ang) * 0.17f, c.y + 0.53f, c.z + std::sin(ang) * 0.17f};
-    DrawCubeV(leaf, Vector3{0.24f, 0.045f, 0.12f}, kFoodLeaf);
+    const float ang = g.animations ? g.animTime * 1.9f : 0.0f;
+    const Vector3 leaf{c.x + std::cos(ang) * 0.17f, c.y + 0.53f * pop,
+                       c.z + std::sin(ang) * 0.17f};
+    DrawCubeV(leaf, Vector3{0.24f * pop, 0.045f, 0.12f * pop}, kFoodLeaf);
 }
 
 void drawSpecialFood(const Game& g) {
     const Vector3 base = cellToWorld(g.specialFood, 0.0f);
-    const float pulse = 0.5f + 0.5f * std::sin(g.animTime * 6.0f);
-    const Vector3 c{base.x, 0.68f + 0.05f * std::sin(g.animTime * 3.4f), base.z};
+    const float pulse = g.animations ? 0.5f + 0.5f * std::sin(g.animTime * 6.0f) : 0.5f;
+    float pop = 1.0f;
+    if (g.animations) {
+        const float x = std::clamp(g.specialAge / 0.3f, 0.0f, 1.0f);
+        pop = 1.0f + 0.5f * std::sin(x * 3.141593f) * (1.0f - x);
+    }
+    const Vector3 c{base.x, (0.68f + (g.animations ? 0.05f * std::sin(g.animTime * 3.4f) : 0.0f)) * 1.0f,
+                    base.z};
 
     DrawPlane(Vector3{base.x, 0.015f, base.z}, Vector2{0.9f, 0.9f}, Color{0, 0, 0, 80});
 
     // Halo shell + orbiting gold motes.
-    DrawSphereEx(c, 0.6f + 0.06f * pulse, 8, 10,
+    DrawSphereEx(c, (0.6f + 0.06f * pulse) * pop, 8, 10,
                  Color{kSpecialHalo.r, kSpecialHalo.g, kSpecialHalo.b, 40});
     for (int i = 0; i < 8; ++i) {
         const float ang = g.animTime * 1.7f + static_cast<float>(i) * 0.785398f;
-        const Vector3 mote{c.x + std::cos(ang) * 0.58f, c.y + 0.16f * std::sin(ang * 2.0f),
-                           c.z + std::sin(ang) * 0.58f};
-        DrawSphereEx(mote, 0.07f, 6, 8, kSpecialHalo);
+        const Vector3 mote{c.x + std::cos(ang) * 0.58f * pop, c.y + 0.16f * std::sin(ang * 2.0f),
+                           c.z + std::sin(ang) * 0.58f * pop};
+        DrawSphereEx(mote, 0.07f * pop, 6, 8, kSpecialHalo);
     }
-    DrawSphereEx(c, 0.34f, 10, 12, kSpecial);
-    DrawSphereEx(vadd(c, Vector3{-0.09f, 0.11f, 0.09f}), 0.075f, 6, 8,
+    DrawSphereEx(c, 0.34f * pop, 10, 12, kSpecial);
+    DrawSphereEx(vadd(c, vmul(Vector3{-0.09f, 0.11f, 0.09f}, pop)), 0.075f * pop, 6, 8,
                  Color{245, 215, 255, 220});
 }
 
@@ -146,7 +161,9 @@ void drawObstacles(const Game& g) {
         }
         const unsigned char a = static_cast<unsigned char>(255.0f * fade);
         const unsigned char edgeA = static_cast<unsigned char>(200.0f * fade);
-        const float h = 0.95f * rise;
+        // Shrink into the floor during the fade-out window.
+        const float sink = (o.life < kObstacleFade) ? std::max(0.15f, o.life / kObstacleFade) : 1.0f;
+        const float h = 0.95f * rise * sink;
         const Vector3 base = cellToWorld(o.cell, 0.0f);
         const Vector3 center{base.x, h * 0.5f, base.z};
 
@@ -170,8 +187,19 @@ void drawSnakeBody(const Game& g) {
     if (n == 0) {
         return;
     }
-    const bool anim = true; // basic motion is always on; Phase 4 gates decorative animation
+    const bool anim = g.animations;
     const float baseY = 0.45f;
+
+    // Swallow ripple: a bump that travels head -> tail after eating.
+    const auto swallowBump = [&](size_t i) {
+        if (!anim || g.swallowClock < 0.0f || n < 2) {
+            return 1.0f;
+        }
+        const float t = std::clamp(g.swallowClock / 0.7f, 0.0f, 1.0f);
+        const float pos = t * static_cast<float>(n - 1);
+        const float d = std::fabs(static_cast<float>(i) - pos);
+        return (d < 1.6f) ? 1.0f + 0.35f * (1.0f - d / 1.6f) : 1.0f;
+    };
 
     // Connectors first so segment caps always sit on top.
     for (size_t i = 1; i < n; ++i) {
@@ -190,17 +218,22 @@ void drawSnakeBody(const Game& g) {
 
     for (size_t i = n; i-- > 0;) {
         const float wave = anim ? 0.05f * std::sin(g.animTime * 5.0f - static_cast<float>(i) * 0.55f) : 0.0f;
+        const float bob = (anim && i == 0) ? 0.03f * std::sin(g.animTime * 6.0f) : 0.0f;
+        const float bump = swallowBump(i);
         const Vector3 p = segmentWorld(g, i, baseY + wave);
         const Color col = g.snakeColorAt(i, n);
 
         if (i == 0) {
-            DrawSphereEx(Vector3{p.x, p.y + 0.1f, p.z}, 0.5f, 10, 12, g.headColor());
+            // Head bobs and leans a little as it moves.
+            const float sway = anim ? 0.05f * std::sin(g.animTime * 2.2f) : 0.0f;
+            DrawSphereEx(Vector3{p.x + sway, p.y + 0.1f + bob, p.z}, 0.5f * bump, 10, 12,
+                         g.headColor());
         } else if (i == n - 1 && n > 2) {
-            DrawSphereEx(p, 0.34f, 8, 10, col);
+            DrawSphereEx(p, 0.34f * bump, 8, 10, col);
         } else {
-            DrawCubeV(p, Vector3{0.84f, 0.7f, 0.84f}, col);
-            DrawCubeV(Vector3{p.x, p.y - 0.2f, p.z}, Vector3{0.72f, 0.24f, 0.72f},
-                      render::tint(col, 0.78f));
+            DrawCubeV(p, Vector3{0.84f * bump, 0.7f * bump, 0.84f * bump}, col);
+            DrawCubeV(Vector3{p.x, p.y - 0.2f, p.z},
+                      Vector3{0.72f * bump, 0.24f, 0.72f * bump}, render::tint(col, 0.78f));
         }
     }
 }
@@ -282,6 +315,10 @@ void Game::draw() const {
 
     if (mode == Mode::Menu) {
         drawMenu();
+        if (transitionT > 0.0f) {
+            DrawRectangle(0, 0, kWinW, kWinH,
+                          Color{8, 9, 14, static_cast<unsigned char>(255.0f * transitionT)});
+        }
         return;
     }
 
@@ -307,8 +344,11 @@ void Game::draw() const {
     if (hasSpecial) {
         drawSpecialFood(*this);
     }
-    drawSnakeBody(*this);
-    drawEyes();
+    // With animation on, the body is gone on game over: it burst into shards.
+    if (!(over && animations)) {
+        drawSnakeBody(*this);
+        drawEyes();
+    }
     drawParticles3D(*this);
     EndMode3D();
 
@@ -511,12 +551,15 @@ void Game::draw() const {
 
     // Game over modal.
     if (over) {
-        DrawRectangle(0, 0, kWinW, kWinH, Color{8, 10, 15, 205});
+        const unsigned char fadeA = static_cast<unsigned char>(205.0f * overFade);
+        DrawRectangle(0, 0, kWinW, kWinH, Color{8, 10, 15, fadeA});
+        const float slide = (1.0f - overFade) * 14.0f;
         const Rectangle modal{static_cast<float>(kWinW - 420) * 0.5f,
-                              static_cast<float>(kWinH - 320) * 0.5f, 420.0f, 320.0f};
+                              static_cast<float>(kWinH - 320) * 0.5f + slide, 420.0f, 320.0f};
         DrawRectangleRounded(Rectangle{modal.x - 4, modal.y - 4, modal.width + 8, modal.height + 8},
                              0.12f, 10, Color{0, 0, 0, 110});
-        DrawRectangleRounded(modal, 0.12f, 10, Color{22, 25, 36, 248});
+        DrawRectangleRounded(modal, 0.12f, 10,
+                             Color{22, 25, 36, static_cast<unsigned char>(248.0f * overFade)});
         DrawRectangleRoundedLinesEx(modal, 0.12f, 10, 2.0f, Color{235, 75, 75, 220});
 
         const char* title = "GAME OVER";
@@ -564,6 +607,11 @@ void Game::draw() const {
         const float actionY = modal.y + modal.height - 48.0f;
         drawKeycap(modal.x + 45.0f, actionY, "R", "Play Again");
         drawKeycap(modal.x + 225.0f, actionY, "ESC", "Main Menu");
+    }
+
+    if (transitionT > 0.0f) {
+        DrawRectangle(0, 0, kWinW, kWinH,
+                      Color{8, 9, 14, static_cast<unsigned char>(255.0f * transitionT)});
     }
 }
 

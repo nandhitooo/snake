@@ -131,6 +131,12 @@ struct Game {
     bool boostRequiresRelease = false; // SPACE/BOOST must be released after a round (re)starts
     bool paused = false;
     bool over = false;
+    bool animations = true; // decorative animation toggle (Phase 4: Settings)
+    float swallowClock = -1.0f; // seconds since the head swallowed food, <0 == idle
+    float foodAge = 0.0f;       // seconds since the current food spawned
+    float specialAge = 0.0f;    // seconds since the current special food spawned
+    float overFade = 0.0f;      // 0..1 fade-in of the game-over overlay
+    float transitionT = 0.0f;   // 0..1 full-screen fade after a mode change
     bool quit = false;
     Mode mode = Mode::Menu;
     bool fsRequest = false;

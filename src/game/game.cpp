@@ -79,12 +79,17 @@ void Game::reset() {
     scoredSeconds = 0;
     obstacleTimer = 0.0f;
     accumulator = 0.0f;
+    swallowClock = -1.0f;
+    foodAge = 0.0f;
+    specialAge = 0.0f;
+    overFade = 0.0f;
     spawnFood();
 }
 
 void Game::startGame() {
     reset();
     mode = Mode::Playing;
+    transitionT = animations ? 1.0f : 0.0f;
 }
 
 bool Game::takeFullscreenRequest() {
@@ -153,6 +158,7 @@ void Game::spawnFood() {
     }
     std::uniform_int_distribution<size_t> pick(0, empty.size() - 1);
     food = empty[pick(rng)];
+    foodAge = 0.0f;
     maybeSpawnSpecial();
 }
 
@@ -182,6 +188,7 @@ void Game::maybeSpawnSpecial() {
     std::uniform_int_distribution<int> effectPick(0, 6);
     specialEffect = static_cast<Effect>(effectPick(rng));
     hasSpecial = true;
+    specialAge = 0.0f;
 }
 
 // Place one solid obstacle in a random empty cell away from the head.
@@ -425,6 +432,7 @@ void Game::update() {
 
     snake.push_front(head);
     if (eats) {
+        swallowClock = 0.0f;
         score += 10;
         if (highScore > 0 && score > highScore) {
             isNewHighRecord = true;
@@ -435,6 +443,7 @@ void Game::update() {
         addFloatingText("+10", Vector3{fPos.x, 1.3f, fPos.z}, kGood, 0.9f);
         spawnFood();
     } else if (eatsSpecial) {
+        swallowClock = 0.0f;
         score += 10;
         if (highScore > 0 && score > highScore) {
             isNewHighRecord = true;
@@ -592,6 +601,21 @@ void Game::stepFrame(float dt) {
     updateVfx(dt);
     updateCamera(dt);
 
+    foodAge += dt;
+    specialAge += dt;
+    if (swallowClock >= 0.0f) {
+        swallowClock += dt;
+        if (swallowClock > 0.9f) {
+            swallowClock = -1.0f;
+        }
+    }
+    if (over && overFade < 1.0f) {
+        overFade = std::min(1.0f, overFade + dt * 3.5f);
+    }
+    if (transitionT > 0.0f) {
+        transitionT = std::max(0.0f, transitionT - dt * 2.6f);
+    }
+
     if (mode == Mode::Menu || paused) {
         return;
     }
@@ -728,11 +752,20 @@ void Game::gameOver() {
         highScore = score;
     }
     triggerShake(0.35f, 4.5f);
+    overFade = animations ? 0.0f : 1.0f;
     if (!snake.empty()) {
         const Cell& h = snake.front();
         const Vector3 hPos = cellToWorld(h, 0.7f);
         spawnParticles(hPos, Color{255, 75, 75, 255}, 28, 6.0f, 0.2f, 0.7f);
         spawnParticles(hPos, Color{255, 200, 60, 255}, 16, 4.5f, 0.15f, 0.5f);
+
+        // The body shatters too: one shard burst every other segment.
+        size_t i = 0;
+        for (const Cell& c : snake) {
+            if (i++ % 2 == 0) {
+                spawnParticles(cellToWorld(c, 0.5f), headColor(), 3, 3.2f, 0.15f, 0.6f);
+            }
+        }
     }
 }
 

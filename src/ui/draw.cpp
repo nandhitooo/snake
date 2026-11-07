@@ -32,25 +32,38 @@ void Game::drawButton(const Rectangle& r, const char* label, bool enabled, bool 
         iconColor = Color{120, 195, 255, 255};
     }
 
+    // Hover treatment: a small breathing scale plus a soft glow behind the card.
+    Rectangle base = r;
+    if (hovered && enabled && animations) {
+        const float grow = 1.0f + 0.015f * (0.5f + 0.5f * std::sin(animTime * 7.0f));
+        const float w = r.width * grow;
+        const float h = r.height * grow;
+        base = Rectangle{r.x - (w - r.width) * 0.5f, r.y - (h - r.height) * 0.5f, w, h};
+        DrawRectangleRounded(Rectangle{base.x - 3.0f, base.y - 3.0f, base.width + 6.0f,
+                                       base.height + 6.0f},
+                             0.3f, 8, Color{95, 175, 250, 26});
+    }
+    const Rectangle r2 = base;
+
     // Drop shadow
-    DrawRectangleRounded(Rectangle{r.x + 1.0f, r.y + 2.0f, r.width, r.height}, 0.28f, 8,
+    DrawRectangleRounded(Rectangle{r2.x + 1.0f, r2.y + 2.0f, r2.width, r2.height}, 0.28f, 8,
                          Color{0, 0, 0, 70});
 
     // Base button
-    DrawRectangleRounded(r, 0.28f, 8, fill);
+    DrawRectangleRounded(r2, 0.28f, 8, fill);
 
     // Top subtle bevel reflection line
     if (enabled) {
-        DrawLineEx(Vector2{r.x + 8.0f, r.y + 2.0f}, Vector2{r.x + r.width - 8.0f, r.y + 2.0f},
+        DrawLineEx(Vector2{r2.x + 8.0f, r2.y + 2.0f}, Vector2{r2.x + r2.width - 8.0f, r2.y + 2.0f},
                    1.2f,
                    Color{255, 255, 255, static_cast<unsigned char>(hovered ? 45 : 22)});
     }
 
     // Border line
-    DrawRectangleRoundedLinesEx(r, 0.28f, 8, 1.8f, border);
+    DrawRectangleRoundedLinesEx(r2, 0.28f, 8, 1.8f, border);
 
-    const float cx = r.x + r.width * 0.5f;
-    const float cy = r.y + r.height * 0.5f;
+    const float cx = r2.x + r2.width * 0.5f;
+    const float cy = r2.y + r2.height * 0.5f;
 
     // Custom vector icons for directional buttons and action buttons
     if (std::strcmp(label, "<") == 0) {

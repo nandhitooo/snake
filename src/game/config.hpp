@@ -85,22 +85,48 @@ inline constexpr Color kMouthTeeth{246, 248, 252, 255};
 
 // Snake head design (Phase C). Mouth/jaw offsets are authored at kHeadRefRadius
 // and scaled from there, so changing the skull size keeps the face attached.
-inline constexpr float kHeadRadius = 0.5f;
+inline constexpr float kHeadRadius = 0.62f;
 inline constexpr float kHeadRefRadius = 0.5f;
-inline constexpr float kHeadEyeFwd = 0.32f;     // eye centre, forward offset
-inline constexpr float kHeadEyeSpread = 0.2f;   // eye centre, lateral offset
-inline constexpr float kHeadEyeHeight = 0.17f;  // eye centre, height offset
-inline constexpr float kHeadEyeWhite = 0.12f;
-inline constexpr float kHeadEyePupil = 0.055f;
-inline constexpr float kHeadEyePupilFwd = 0.07f;
-inline constexpr float kHeadEyeShine = 0.0f;    // highlight radius (0 disables)
-inline constexpr float kHeadEyeShineOffset = 0.035f;
-inline constexpr float kHeadEyePupilGrow = 0.0f; // pupil growth per unit of mouthOpen
-inline constexpr float kHeadPupilShift = 0.0f;   // max gaze offset
-inline constexpr float kHeadBlinkLine = 0.11f;   // half length of the closed-eye line
+inline constexpr float kHeadEyeFwd = 0.4f;      // eye centre, forward offset
+inline constexpr float kHeadEyeSpread = 0.26f;  // eye centre, lateral offset
+inline constexpr float kHeadEyeHeight = 0.21f;  // eye centre, height offset
+inline constexpr float kHeadEyeWhite = 0.17f;
+inline constexpr float kHeadEyePupil = 0.088f;
+inline constexpr float kHeadEyePupilFwd = 0.078f;
+inline constexpr float kHeadEyeShine = 0.032f;  // highlight radius (0 disables)
+inline constexpr float kHeadEyeShineOffset = 0.045f;
+inline constexpr float kHeadEyePupilGrow = 0.25f; // pupil growth per unit of mouthOpen
+inline constexpr float kHeadPupilShift = 0.04f;   // max gaze offset
+inline constexpr float kHeadBlinkLine = 0.11f;    // half length of the closed-eye line
 inline constexpr float kHeadBlinkThick = 0.018f;
 inline constexpr float kHeadEyeHappyThick = 0.02f;
-inline constexpr float kHeadBitePulseScale = 0.0f;
+inline constexpr float kHeadBitePulseScale = 0.08f;
+
+// Body: chibi proportions (round segments, tapering toward the tail).
+inline constexpr float kHeadBodyNear = 0.42f;  // first body segment
+inline constexpr float kHeadBodyFar = 0.28f;   // last regular segment
+inline constexpr float kHeadTailRadius = 0.18f;
+inline constexpr float kHeadWaveAmp = 0.07f;   // body wave height
+inline constexpr float kHeadTailWag = 0.08f;   // lateral tip sway
+inline constexpr float kHeadCubeTint = 0.84f;  // alternating band for Cube skins
+
+// Face details.
+inline constexpr float kHeadBlushFwd = 0.36f;
+inline constexpr float kHeadBlushSpread = 0.4f;
+inline constexpr float kHeadBlushHeight = -0.17f;
+inline constexpr float kHeadBlushSize = 0.105f;
+inline constexpr float kHeadBlushFlat = 0.55f;    // vertical squash
+inline constexpr float kHeadBlushMix = 0.72f;     // blend toward the pink
+inline constexpr unsigned char kHeadBlushAlpha = 170;
+inline constexpr Color kHeadBlush{255, 140, 165, 255};
+inline constexpr float kHeadSmileFwd = 0.9f;
+inline constexpr float kHeadSmileDown = 0.55f;
+inline constexpr float kHeadSmileHalfWidth = 0.5f; // radians
+inline constexpr float kHeadSmileDroop = 0.28f;
+inline constexpr float kHeadSmileThick = 0.016f;
+inline constexpr Color kHeadSmile{42, 32, 38, 255};
+inline constexpr float kHeadTongueFwd = 0.55f;
+inline constexpr float kHeadTongueDrop = 0.14f;
 
 // Palette
 inline const Color kBg{14, 14, 20, 255};

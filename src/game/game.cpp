@@ -1031,11 +1031,23 @@ float Game::mouthTargetDistance() const {
         return best;
     }
 
+    int cells = 0;
+    Cell target{0, 0};
+    if (!findEdibleAhead(cells, target)) {
+        return -1.0f;
+    }
+    return static_cast<float>(cells) + (1.0f - std::clamp(tickAlpha, 0.0f, 1.0f));
+}
+
+bool Game::findEdibleAhead(int& cellsOut, Cell& cellOut) const {
+    if (snake.empty()) {
+        return false;
+    }
     Cell c = snake.front();
     for (int cells = 1; cells <= kMouthScanCells; ++cells) {
         c = nextCellWrapped(c, dir);
         if (isSolid(c)) {
-            return -1.0f; // an obstacle blocks the line: stay shut
+            return false; // an obstacle blocks the line
         }
         bool ownBody = false;
         for (size_t i = 1; i < snake.size(); ++i) {
@@ -1045,7 +1057,7 @@ float Game::mouthTargetDistance() const {
             }
         }
         if (ownBody) {
-            return -1.0f;
+            return false;
         }
         bool edible = (c == food) || (hasSpecial && c == specialFood);
         bool rivalHere = false;
@@ -1067,13 +1079,57 @@ float Game::mouthTargetDistance() const {
             }
         }
         if (rivalHere && !edible) {
-            return -1.0f; // a rival that would kill us: never open for it
+            return false; // a rival that would kill us is never a target
         }
         if (edible) {
-            return static_cast<float>(cells) + (1.0f - std::clamp(tickAlpha, 0.0f, 1.0f));
+            cellsOut = cells;
+            cellOut = c;
+            return true;
         }
     }
-    return -1.0f;
+    return false;
+}
+
+// Pupils follow the nearest edible target, or the turn that is queued up.
+Vector2 Game::headGaze() const {
+    if (!animations || snake.empty()) {
+        return Vector2{0.0f, 0.0f};
+    }
+    int cells = 0;
+    Cell target{0, 0};
+    if (findEdibleAhead(cells, target)) {
+        int dx = target.x - snake.front().x;
+        int dy = target.y - snake.front().y;
+        if (dx > kCols / 2) {
+            dx -= kCols;
+        } else if (dx < -(kCols / 2)) {
+            dx += kCols;
+        }
+        if (dy > kRows / 2) {
+            dy -= kRows;
+        } else if (dy < -(kRows / 2)) {
+            dy += kRows;
+        }
+        const Vector3 fwd = dirToWorld(dir);
+        const Vector3 right{-fwd.z, 0.0f, fwd.x};
+        const float wx = static_cast<float>(dx);
+        const float wz = static_cast<float>(dy);
+        Vector2 gaze{right.x * wx + right.z * wz, fwd.x * wx + fwd.z * wz};
+        const float len = std::sqrt(gaze.x * gaze.x + gaze.y * gaze.y);
+        if (len > 1e-4f) {
+            gaze.x /= len;
+            gaze.y /= len;
+            return gaze;
+        }
+        return Vector2{0.0f, 0.0f};
+    }
+    if (hasBuffered && !isOpposite(buffered, dir) && buffered != dir) {
+        const Vector3 fwd = dirToWorld(dir);
+        const Vector3 right{-fwd.z, 0.0f, fwd.x};
+        const Vector3 want = dirToWorld(buffered);
+        return Vector2{right.x * want.x + right.z * want.z, fwd.x * want.x + fwd.z * want.z};
+    }
+    return Vector2{0.0f, 0.0f};
 }
 
 // Per-frame jaw animation: open when food is close ahead, snap shut on the bite.

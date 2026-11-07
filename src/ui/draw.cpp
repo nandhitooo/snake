@@ -505,10 +505,15 @@ void Game::drawSkins() const {
             pose.eye = eyeColor();
             pose.crown = sk.crown;
             drawSnakeHead(pose);
-        } else if (sk.shape == SegmentShape::Sphere) {
-            DrawSphereEx(p, 0.42f, 8, 10, col);
         } else {
-            DrawCubeV(p, Vector3{0.78f, 0.7f, 0.78f}, col);
+            // Same chibi taper as gameplay: round segments, banded for Cube skins.
+            const float t = static_cast<float>(i) / static_cast<float>(previewCount - 2);
+            const float r = kHeadTailRadius + (kHeadBodyNear - kHeadTailRadius) * t;
+            Color seg = col;
+            if (sk.shape == SegmentShape::Cube && (i % 2) == 1) {
+                seg = render::tint(col, kHeadCubeTint);
+            }
+            DrawSphereEx(p, r, 8, 10, seg);
         }
     }
     EndMode3D();

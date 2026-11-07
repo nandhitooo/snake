@@ -247,6 +247,12 @@ struct Game {
     void triggerBite();
     float mouthTargetDistance() const;
 
+    // First edible cell within kMouthScanCells ahead of the head, or false if the
+    // line is blocked (obstacle, own body, or a rival that would kill us).
+    bool findEdibleAhead(int& cellsOut, Cell& cellOut) const;
+    // Pupil look direction: x == right, y == forward. Unit length or zero.
+    Vector2 headGaze() const;
+
     // Interpolated world position of segment `index` (same maths the renderer
     // uses) so the camera follows the drawn head instead of the logical cell.
     Vector3 visualSegmentWorld(size_t index, float y) const;

@@ -16,6 +16,14 @@ Vector3 vadd(Vector3 a, Vector3 b) { return Vector3{a.x + b.x, a.y + b.y, a.z + 
 
 Vector3 vmul(Vector3 a, float s) { return Vector3{a.x * s, a.y * s, a.z * s}; }
 
+Vector3 vnorm(Vector3 v) {
+    const float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    if (len < 1e-6f) {
+        return Vector3{1.0f, 0.0f, 0.0f};
+    }
+    return Vector3{v.x / len, v.y / len, v.z / len};
+}
+
 // World position of segment i, interpolated between the previous and current tick.
 // The maths lives in Game so the camera can follow the very same head.
 Vector3 segmentWorld(const Game& g, size_t i, float y) { return g.visualSegmentWorld(i, y); }
@@ -244,7 +252,7 @@ void drawMouthGeometry(const HeadPose& p, float headRadius) {
 }
 
 // The idle forked tongue flick.
-void drawHeadTongue(const HeadPose& p, float s) {
+void drawHeadTongue(const HeadPose& p) {
     if (!p.animate || p.mouthOpen > 0.2f) {
         return;
     }
@@ -252,11 +260,12 @@ void drawHeadTongue(const HeadPose& p, float s) {
     if (cycle >= 0.35f) {
         return;
     }
+    const float s = p.scale;
     const Vector3 fwd = p.fwd;
     const Vector3 right{-fwd.z, 0.0f, fwd.x};
     const float ext = (cycle < 0.17f) ? (cycle / 0.17f) : ((0.35f - cycle) / 0.18f);
     const Vector3 base =
-        vadd(p.pos, vadd(vmul(fwd, 0.44f * s), Vector3{0.0f, -0.12f * s, 0.0f}));
+        vadd(p.pos, vadd(vmul(fwd, kHeadTongueFwd * s), Vector3{0.0f, -kHeadTongueDrop * s, 0.0f}));
     const Vector3 tip = vadd(base, vmul(fwd, 0.34f * s * ext));
     const Color tongue{230, 60, 85, 255};
     DrawCylinderEx(base, tip, 0.035f * s, 0.028f * s, 5, tongue);
@@ -268,8 +277,8 @@ void drawHeadTongue(const HeadPose& p, float s) {
 
 // Eyes: white, pupil, glint. Blink squashes them vertically around the eye
 // centre with an rlgl matrix; happy eyes become "^ ^" strokes instead.
-void drawHeadEyes(const HeadPose& p, float headRadius) {
-    const float s = headRadius / kHeadRefRadius;
+void drawHeadEyes(const HeadPose& p) {
+    const float s = p.scale;
     const Vector3 fwd = p.fwd;
     const Vector3 right{-fwd.z, 0.0f, fwd.x};
     const Vector3 up{0.0f, 1.0f, 0.0f};
@@ -331,6 +340,54 @@ void drawHeadCrown(const HeadPose& p, float headRadius) {
               Vector3{0.07f * s, 0.18f * s, 0.07f * s}, kGold);
 }
 
+// Soft pink cheeks, flattened along the vertical axis.
+void drawHeadBlush(const HeadPose& p) {
+    const float s = p.scale;
+    const Vector3 fwd = p.fwd;
+    const Vector3 right{-fwd.z, 0.0f, fwd.x};
+    const Vector3 up{0.0f, 1.0f, 0.0f};
+    const Color blush = render::withAlpha(
+        render::lerpColor(p.head, kHeadBlush, kHeadBlushMix), kHeadBlushAlpha);
+
+    for (int side = -1; side <= 1; side += 2) {
+        const Vector3 centre =
+            vadd(p.pos, vadd(vmul(fwd, kHeadBlushFwd * s),
+                             vadd(vmul(right, kHeadBlushSpread * s * static_cast<float>(side)),
+                                  vmul(up, kHeadBlushHeight * s))));
+        rlPushMatrix();
+        rlTranslatef(centre.x, centre.y, centre.z);
+        rlScalef(1.0f, kHeadBlushFlat, 1.0f);
+        DrawSphereEx(Vector3{0.0f, 0.0f, 0.0f}, kHeadBlushSize * s, 8, 10, blush);
+        rlPopMatrix();
+    }
+}
+
+// A small arc of dark cylinders lying on the skull, below the eyes. Skipped while
+// the jaw or the happy eyes are showing.
+void drawHeadSmile(const HeadPose& p) {
+    if (p.mouthOpen > 0.1f || p.happy) {
+        return;
+    }
+    const float s = p.scale;
+    const Vector3 fwd = p.fwd;
+    const Vector3 right{-fwd.z, 0.0f, fwd.x};
+    const Vector3 down{0.0f, -1.0f, 0.0f};
+    const Vector3 centreDir = vnorm(vadd(vmul(fwd, kHeadSmileFwd), vmul(down, kHeadSmileDown)));
+
+    Vector3 prev{0.0f, 0.0f, 0.0f};
+    for (int i = 0; i <= 3; ++i) {
+        const float t = static_cast<float>(i) / 1.5f - 1.0f; // -1, -1/3, 1/3, 1
+        const float ang = t * kHeadSmileHalfWidth;
+        Vector3 d = vadd(vmul(centreDir, std::cos(ang)), vmul(right, std::sin(ang)));
+        d = vnorm(vadd(d, vmul(down, kHeadSmileDroop * (1.0f - t * t))));
+        const Vector3 pt = vadd(p.pos, vmul(d, kHeadRadius * s * 1.01f));
+        if (i > 0) {
+            DrawCylinderEx(prev, pt, kHeadSmileThick * s, kHeadSmileThick * s, 5, kHeadSmile);
+        }
+        prev = pt;
+    }
+}
+
 void drawSnakeHeadBody(const HeadPose& p) {
     const float radius = kHeadRadius * p.scale;
     // Bite pulse: the skull throbs briefly as the jaw snaps shut.
@@ -341,10 +398,14 @@ void drawSnakeHeadBody(const HeadPose& p) {
     }
     const float headRadius = radius * pulse;
 
-    DrawSphereEx(p.pos, headRadius, 10, 12, p.head);
+    DrawSphereEx(p.pos, headRadius, 12, 14, p.head);
     drawMouthGeometry(p, headRadius);
-    drawHeadEyes(p, headRadius);
-    drawHeadTongue(p, headRadius / kHeadRefRadius);
+    if (kHeadBlushSize > 0.0f) {
+        drawHeadBlush(p);
+    }
+    drawHeadSmile(p);
+    drawHeadEyes(p);
+    drawHeadTongue(p);
     if (p.crown) {
         drawHeadCrown(p, headRadius);
     }
@@ -384,6 +445,8 @@ void drawSnakeBody(const Game& g) {
     const float baseY = 0.45f;
     const SkinDef& sk = g.skin();
     const bool glowSkin = (sk.trail == TrailKind::Glow);
+    const Vector3 headFwd = dirToWorld(g.dir);
+    const Vector3 side{-headFwd.z, 0.0f, headFwd.x};
 
     // Swallow ripple: a bump that travels head -> tail after eating.
     const auto swallowBump = [&](size_t i) {
@@ -396,39 +459,68 @@ void drawSnakeBody(const Game& g) {
         return (d < 1.6f) ? 1.0f + 0.35f * (1.0f - d / 1.6f) : 1.0f;
     };
 
-    // Connectors first so segment caps always sit on top.
+    // Chibi taper: fat behind the head, slim at the tail, tiny tip.
+    const auto radiusAt = [&](size_t i) {
+        if (n > 2 && i + 1 == n) {
+            return kHeadTailRadius;
+        }
+        if (n <= 2) {
+            return kHeadBodyNear;
+        }
+        const float t = static_cast<float>(i) / static_cast<float>(n - 2);
+        return kHeadBodyNear + (kHeadBodyFar - kHeadBodyNear) * std::clamp(t, 0.0f, 1.0f);
+    };
+
+    // Interpolated segment position plus body wave and the tail wag.
+    const auto bodyPoint = [&](size_t i) {
+        const float wave =
+            anim ? kHeadWaveAmp * std::sin(g.animTime * 5.0f - static_cast<float>(i) * 0.55f) : 0.0f;
+        Vector3 p = segmentWorld(g, i, baseY + wave);
+        if (anim && n > 3 && i + 3 >= n) {
+            // The last three segments wag, growing toward the tip.
+            const float w = static_cast<float>(i - (n - 3) + 1) / 3.0f;
+            const float sway =
+                kHeadTailWag * w * std::sin(g.animTime * 7.0f + static_cast<float>(i) * 0.5f);
+            p.x += side.x * sway;
+            p.z += side.z * sway;
+        }
+        return p;
+    };
+
+    // Round connectors first so the segment caps always sit on top of them.
     for (size_t i = 1; i < n; ++i) {
-        const float waveA = anim ? 0.05f * std::sin(g.animTime * 5.0f - static_cast<float>(i) * 0.55f) : 0.0f;
-        const float waveB = anim ? 0.05f * std::sin(g.animTime * 5.0f - static_cast<float>(i - 1) * 0.55f) : 0.0f;
-        const Vector3 a = segmentWorld(g, i - 1, baseY + waveB);
-        const Vector3 b = segmentWorld(g, i, baseY + waveA);
+        const Vector3 a = bodyPoint(i - 1);
+        const Vector3 b = bodyPoint(i);
         const float dx = std::fabs(a.x - b.x);
         const float dz = std::fabs(a.z - b.z);
         if (dx > 1.05f || dz > 1.05f) {
             continue; // wrapped across the arena
         }
-        const Vector3 mid{(a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f, (a.z + b.z) * 0.5f};
-        DrawCubeV(mid, Vector3{dx + 0.72f, 0.62f, dz + 0.72f}, g.snakeColorAt(i, n));
+        const float linkRadius = std::min(radiusAt(i - 1), radiusAt(i)) * 0.92f;
+        Color link = g.snakeColorAt(i, n);
+        if (sk.shape == SegmentShape::Cube && (i % 2) == 0) {
+            link = render::tint(link, kHeadCubeTint);
+        }
+        DrawCylinderEx(a, b, linkRadius, linkRadius, 8, link);
     }
 
     for (size_t i = n; i-- > 0;) {
-        const float wave = anim ? 0.05f * std::sin(g.animTime * 5.0f - static_cast<float>(i) * 0.55f) : 0.0f;
         const float bob = (anim && i == 0) ? 0.03f * std::sin(g.animTime * 6.0f) : 0.0f;
         const float bump = swallowBump(i);
-        const Vector3 p = segmentWorld(g, i, baseY + wave);
+        const Vector3 p = bodyPoint(i);
         const Color col = g.snakeColorAt(i, n);
+        const float r = radiusAt(i);
 
         if (glowSkin) {
-            DrawSphereEx(p, 0.62f * bump, 6, 8, render::withAlpha(sk.accent, 36));
+            DrawSphereEx(p, r * 1.45f * bump, 6, 8, render::withAlpha(sk.accent, 36));
         }
 
         if (i == 0) {
             // Head bobs and leans a little as it moves.
             const float sway = anim ? 0.05f * std::sin(g.animTime * 2.2f) : 0.0f;
-            const Vector3 head{p.x + sway, p.y + 0.1f + bob, p.z};
             HeadPose pose;
-            pose.pos = head;
-            pose.fwd = dirToWorld(g.dir);
+            pose.pos = Vector3{p.x + sway, p.y + 0.1f + bob, p.z};
+            pose.fwd = headFwd;
             pose.scale = bump;
             pose.time = g.animTime;
             pose.mouthOpen = g.mouthOpen;
@@ -437,15 +529,18 @@ void drawSnakeBody(const Game& g) {
             pose.head = g.headColor();
             pose.eye = g.eyeColor();
             pose.crown = sk.crown;
+            const Vector2 gaze = g.headGaze();
+            pose.gazeRight = gaze.x;
+            pose.gazeFwd = gaze.y;
             drawSnakeHeadBody(pose);
-        } else if (i == n - 1 && n > 2) {
-            DrawSphereEx(p, 0.34f * bump, 8, 10, col);
-        } else if (sk.shape == SegmentShape::Sphere) {
-            DrawSphereEx(p, 0.44f * bump, 8, 10, col);
         } else {
-            DrawCubeV(p, Vector3{0.84f * bump, 0.7f * bump, 0.84f * bump}, col);
-            DrawCubeV(Vector3{p.x, p.y - 0.2f, p.z},
-                      Vector3{0.72f * bump, 0.24f, 0.72f * bump}, render::tint(col, 0.78f));
+            // Every skin is round now; Cube skins keep their identity with an
+            // alternating band instead of a hard-edged box.
+            Color seg = col;
+            if (sk.shape == SegmentShape::Cube && (i % 2) == 1) {
+                seg = render::tint(col, kHeadCubeTint);
+            }
+            DrawSphereEx(p, r * bump, 8, 10, seg);
         }
     }
 }

@@ -46,6 +46,8 @@ void Game::reset() {
     buffered = Dir::Right;
     hasBuffered = false;
     boostHeld = false;
+    uiBoostHeld = false;
+    boostRequiresRelease = true; // a held key from the menu must not boost the new round
     paused = false;
     boostTicks = 0;
     obstacles.clear();
@@ -309,6 +311,11 @@ void Game::updateObstacles(float dt) {
         if (warnings[i].timer <= 0.0f) {
             const Cell c = warnings[i].cell;
             warnings.erase(warnings.begin() + static_cast<std::ptrdiff_t>(i));
+            // The snake may have moved onto the warned cell while it blinked: never
+            // materialise a solid on the snake, the food or the special food.
+            if (isSnake(c) || c == food || (hasSpecial && c == specialFood)) {
+                continue;
+            }
             if (static_cast<int>(obstacles.size()) >= kMaxObstacles) {
                 obstacles.pop_front(); // drop the oldest solid obstacle
             }
@@ -499,6 +506,9 @@ void Game::togglePause() {
     if (paused) {
         boostHeld = false;
         uiBoostHeld = false;
+        hasBuffered = false; // a turn queued before the pause must not fire on resume
+        buffered = dir;
+        boostRequiresRelease = true;
     }
 }
 

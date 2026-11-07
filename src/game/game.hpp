@@ -90,6 +90,7 @@ struct Game {
     Dir buffered = Dir::Right;
     bool hasBuffered = false; // at most one turn queued per tick
     bool boostHeld = false;
+    bool boostRequiresRelease = false; // SPACE/BOOST must be released after a round (re)starts
     bool paused = false;
     bool over = false;
     bool quit = false;

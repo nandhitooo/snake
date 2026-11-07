@@ -42,7 +42,15 @@ void Game::handleInput() {
         return;
     }
 
-    boostHeld = IsKeyDown(KEY_SPACE) || uiBoostHeld;
+    if (boostRequiresRelease) {
+        // Ignore a key still held from the menu / previous round until it is released.
+        if (!IsKeyDown(KEY_SPACE) && !uiBoostHeld) {
+            boostRequiresRelease = false;
+        }
+        boostHeld = false;
+    } else {
+        boostHeld = IsKeyDown(KEY_SPACE) || uiBoostHeld;
+    }
 
     if (hasBuffered) {
         return; // one buffered turn per tick at most
@@ -84,23 +92,18 @@ void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
         return;
     }
     if (over) {
+        // The game-over modal covers the whole window: the control bar underneath
+        // must not receive clicks through it.
         if (pressed && CheckCollisionPointRec(mouse, ui::restartRect())) {
             reset();
         }
-    } else {
+        return;
+    }
+    {
         if (pressed && CheckCollisionPointRec(mouse, ui::pauseRect())) {
             togglePause();
         }
-        if (paused) {
-            // Clicking inside the arena pause overlay also resumes the game
-            if (pressed &&
-                CheckCollisionPointRec(mouse, Rectangle{static_cast<float>(kArenaX),
-                                                        static_cast<float>(kArenaY),
-                                                        static_cast<float>(kArenaW),
-                                                        static_cast<float>(kArenaH)})) {
-                togglePause();
-            }
-        } else {
+        if (!paused) {
             uiBoostHeld = down && CheckCollisionPointRec(mouse, ui::boostRect());
             if (pressed) {
                 if (CheckCollisionPointRec(mouse, ui::moveLeftRect())) {
@@ -115,7 +118,7 @@ void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
             }
         }
     }
-    if (pressed && CheckCollisionPointRec(mouse, ui::quitRect())) {
+    if (mode == Mode::Playing && !over && pressed && CheckCollisionPointRec(mouse, ui::quitRect())) {
         quit = true;
     }
 }

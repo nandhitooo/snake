@@ -47,7 +47,16 @@ int main() {
         const Vector2 offset{(screenW - static_cast<float>(kWinW) * scale) * 0.5f,
                              (screenH - static_cast<float>(kWinH) * scale) * 0.5f};
         const Vector2 mouse = GetMousePosition();
-        const Vector2 virtualMouse{(mouse.x - offset.x) / scale, (mouse.y - offset.y) / scale};
+        // Points outside the letterboxed canvas are not part of the UI: map them off-screen
+        // so a click in the black bars can never hit a button.
+        const float canvasW = static_cast<float>(kWinW) * scale;
+        const float canvasH = static_cast<float>(kWinH) * scale;
+        const bool inCanvas = mouse.x >= offset.x && mouse.x <= offset.x + canvasW &&
+                              mouse.y >= offset.y && mouse.y <= offset.y + canvasH;
+        const Vector2 virtualMouse = inCanvas
+                                         ? Vector2{(mouse.x - offset.x) / scale,
+                                                   (mouse.y - offset.y) / scale}
+                                         : Vector2{-1000.0f, -1000.0f};
 
         game.handleUi(virtualMouse, IsMouseButtonDown(MOUSE_BUTTON_LEFT),
                       IsMouseButtonPressed(MOUSE_BUTTON_LEFT));

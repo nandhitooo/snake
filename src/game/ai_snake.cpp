@@ -1,5 +1,6 @@
 #include "game/ai_snake.hpp"
 
+#include "game/audio.hpp"
 #include "game/game.hpp"
 
 #include <algorithm>
@@ -119,6 +120,7 @@ void trySpawnAi(Game& g, const Cell& at, size_t length) {
         ai.dir = d;
         ai.spawnT = g.animations ? 0.0f : 1.0f;
         g.ai.push_back(ai);
+        audio.play(SfxId::AiSpawn);
         return;
     }
 }
@@ -188,6 +190,7 @@ void eatAiSnake(Game& g, size_t index) {
     growPlayer(g, std::max<size_t>(1, length / 2) + 1);
     g.addFloatingText("+" + std::to_string(points), cellToWorld(head, 1.5f), kGood, 1.1f);
     g.spawnParticles(cellToWorld(head, 0.6f), Color{120, 255, 160, 220}, 18, 5.0f, 0.18f, 0.6f);
+    audio.play(SfxId::EatAiSnake);
     killAi(ai);
 }
 
@@ -293,6 +296,7 @@ void updateAiTick(Game& g) {
         }
 
         if (!moved) {
+            audio.play(SfxId::AiDie);
             killAi(ai); // no legal move: die rather than freeze
             continue;
         }
@@ -319,11 +323,13 @@ void updateAiTick(Game& g) {
                 died = true;
             }
             if (theirs <= mine) {
+                audio.play(SfxId::AiDie);
                 killAi(g.ai[other]);
             }
         }
 
         if (died) {
+            audio.play(SfxId::AiDie);
             killAi(ai);
             continue;
         }

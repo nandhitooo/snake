@@ -17,6 +17,10 @@ struct Settings {
     int particles = 1;  // 0=low, 1=normal, 2=high
     int shake = 1;      // 0/1
     int skin = 0;       // index into kSkins (Phase 5)
+    int masterVol = 80; // percent
+    int musicVol = 50;  // percent
+    int sfxVol = 80;    // percent
+    int mute = 0;       // 0/1
 };
 
 struct Resolution {
@@ -44,6 +48,10 @@ enum SettingRow {
     RowAnimations,
     RowParticles,
     RowShake,
+    RowMasterVol,
+    RowMusicVol,
+    RowSfxVol,
+    RowMute,
     RowReset,
     kSettingRowCount
 };

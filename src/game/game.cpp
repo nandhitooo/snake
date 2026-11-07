@@ -1,5 +1,6 @@
 #include "game/game.hpp"
 #include "game/ai_snake.hpp"
+#include "game/audio.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -68,6 +69,8 @@ void Game::reset() {
     particles.clear();
     floatingTexts.clear();
     resetAi(*this);
+    hoverId = -1;
+    wasBoosting = false;
     shakeTimer = 0.0f;
     shakeIntensity = 0.0f;
     isNewHighRecord = false;
@@ -291,6 +294,11 @@ void Game::applyEffect(Effect e) {
         fxColor = kBad;
         break;
     }
+
+    // Spec grouping: slow/trim/curse are the bad outcomes, the rest are good.
+    const bool good = (e == Effect::Bonus || e == Effect::Haste || e == Effect::Grow ||
+                       e == Effect::Cleanse);
+    audio.play(good ? SfxId::SpecialGood : SfxId::SpecialBad);
 }
 
 // Every 8 s: mark 1-3 random empty cells that are not within 4 cells of the
@@ -315,12 +323,16 @@ void Game::spawnWave() {
     }
     std::uniform_int_distribution<int> countDist(1, 3);
     const int count = countDist(rng);
+    const size_t before = warnings.size();
     for (int i = 0; i < count && !candidates.empty(); ++i) {
         std::uniform_int_distribution<size_t> pick(0, candidates.size() - 1);
         const size_t index = pick(rng);
         warnings.push_back(Warning{candidates[index], kWarningTime});
         candidates[index] = candidates.back();
         candidates.pop_back();
+    }
+    if (warnings.size() > before) {
+        audio.play(SfxId::ObstacleWarning);
     }
 }
 
@@ -355,6 +367,7 @@ void Game::updateObstacles(float dt) {
                 obstacles.pop_front(); // drop the oldest solid obstacle
             }
             obstacles.push_back(Obstacle{c, kObstacleLife});
+            audio.play(SfxId::ObstacleSpawn);
         } else {
             ++i;
         }
@@ -465,6 +478,7 @@ void Game::update() {
         spawnParticles(fPos, kFood, 14, 4.5f, 0.16f, 0.45f);
         spawnParticles(fPos, Color{255, 230, 160, 255}, 6, 3.0f, 0.11f, 0.35f);
         addFloatingText("+10", Vector3{fPos.x, 1.3f, fPos.z}, kGood, 0.9f);
+        audio.play(SfxId::EatFood);
         spawnFood();
     } else if (eatsSpecial) {
         swallowClock = 0.0f;
@@ -556,6 +570,7 @@ void Game::togglePause() {
         return;
     }
     paused = !paused;
+    audio.play(paused ? SfxId::Pause : SfxId::Resume);
     if (paused) {
         boostHeld = false;
         uiBoostHeld = false;
@@ -631,6 +646,14 @@ void Game::updateVfx(float dt) {
 void Game::stepFrame(float dt) {
     updateVfx(dt);
     updateCamera(dt);
+
+    // Boost start/end are edges, not per-frame events. Pausing keeps the state so
+    // resuming a held boost does not replay the start sound.
+    const bool boosting = boostActive();
+    if (!paused && !over && boosting != wasBoosting) {
+        wasBoosting = boosting;
+        audio.play(boosting ? SfxId::BoostStart : SfxId::BoostEnd);
+    }
 
     foodAge += dt;
     specialAge += dt;
@@ -810,6 +833,7 @@ Color Game::snakeColorAt(size_t index, size_t count) const {
 
 void Game::applySettings() {
     normalTick = kNormalTick * speedTickScale(settings.speed);
+    audio.applyVolumes(settings.masterVol, settings.musicVol, settings.sfxVol, settings.mute != 0);
     animations = settings.animations != 0;
     shakeEnabled = settings.shake != 0;
     cameraMode = static_cast<CameraMode>(std::clamp(settings.camera, 0, 2));
@@ -838,6 +862,7 @@ void Game::applyWindowSettings() {
 
 void Game::gameOver() {
     over = true;
+    audio.play(SfxId::GameOver);
     boostHeld = false;
     paused = false;
     boostTicks = 0;

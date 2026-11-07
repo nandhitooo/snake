@@ -29,6 +29,14 @@ const char* settingName(int row) {
         return "PARTICLES";
     case RowShake:
         return "SCREEN SHAKE";
+    case RowMasterVol:
+        return "MASTER VOLUME";
+    case RowMusicVol:
+        return "MUSIC VOLUME";
+    case RowSfxVol:
+        return "SFX VOLUME";
+    case RowMute:
+        return "MUTE";
     case RowReset:
         return "RESET TO DEFAULT";
     default:
@@ -425,29 +433,29 @@ void Game::drawSettings() const {
             DrawRectangleRoundedLinesEx(row, 0.35f, 6, 1.4f, kCyan);
         }
 
-        DrawText(settingName(i), static_cast<int>(row.x + 14), static_cast<int>(row.y + 7), 13,
+        DrawText(settingName(i), static_cast<int>(row.x + 14), static_cast<int>(row.y + 4), 12,
                  selected ? kText : Color{180, 190, 210, 255});
 
         const std::string value = settingLabel(settings, i);
         const float zoneL = row.x + row.width - 200.0f;
         const float zoneR = row.x + row.width - 36.0f;
-        const int valueW = MeasureText(value.c_str(), 13);
+        const int valueW = MeasureText(value.c_str(), 12);
         if (i != RowReset) {
-            DrawText("<", static_cast<int>(zoneL), static_cast<int>(row.y + 6), 14,
+            DrawText("<", static_cast<int>(zoneL), static_cast<int>(row.y + 3), 13,
                      selected ? kCyan : Color{110, 120, 140, 255});
-            DrawText(">", static_cast<int>(zoneR), static_cast<int>(row.y + 6), 14,
+            DrawText(">", static_cast<int>(zoneR), static_cast<int>(row.y + 3), 13,
                      selected ? kCyan : Color{110, 120, 140, 255});
         }
         DrawText(value.c_str(),
                  static_cast<int>((zoneL + zoneR) * 0.5f - static_cast<float>(valueW) * 0.5f),
-                 static_cast<int>(row.y + 7), 13,
+                 static_cast<int>(row.y + 4), 12,
                  selected ? kGold : Color{150, 200, 225, 255});
     }
 
     drawButton(ui::settingsBackRect(), "BACK", true, false,
                CheckCollisionPointRec(uiMouse, ui::settingsBackRect()));
 
-    const char* hint = "UP/DOWN select  |  LEFT/RIGHT change  |  ENTER cycle  |  ESC back";
+    const char* hint = "UP/DOWN select  |  LEFT/RIGHT change  |  M mute  |  ESC back";
     constexpr int hintSize = 12;
     const int hintW = MeasureText(hint, hintSize);
     DrawText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});

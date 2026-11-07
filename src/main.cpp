@@ -14,6 +14,7 @@
 // menu. Controls: WASD/arrows turn, hold SPACE for boost, R restarts after
 // game over. The bottom bar exposes clickable controls.
 
+#include "game/audio.hpp"
 #include "game/game.hpp"
 
 #include <algorithm>
@@ -24,6 +25,7 @@ int main() {
     InitWindow(kWinW, kWinH, "Snake");
     SetExitKey(KEY_NULL); // ESC is handled by the game (menu/quit), not the window
     SetTargetFPS(60);
+    audio.init(); // no device / no assets = silent, the game still runs
 
     // Fixed-size virtual canvas, letterboxed to the real window (fullscreen too).
     RenderTexture2D canvas = LoadRenderTexture(kWinW, kWinH);
@@ -70,6 +72,17 @@ int main() {
         game.handleInput();
         game.stepFrame(dt);
 
+        // Menu music outside a run, gameplay music inside it, ducked on pause/over.
+        const MusicTrack wanted =
+            (game.mode == Mode::Playing) ? MusicTrack::Gameplay : MusicTrack::Menu;
+        float duck = 1.0f;
+        if (game.mode == Mode::Playing && game.paused) {
+            duck = 0.3f;
+        } else if (game.mode == Mode::Playing && game.over) {
+            duck = 0.4f;
+        }
+        audio.update(wanted, duck, dt);
+
         BeginTextureMode(canvas);
         game.draw();
         EndTextureMode();
@@ -84,6 +97,7 @@ int main() {
         EndDrawing();
     }
 
+    audio.shutdown();
     UnloadRenderTexture(canvas);
     CloseWindow();
     return 0;

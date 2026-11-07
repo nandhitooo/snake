@@ -79,6 +79,14 @@ Settings loadSettings(const std::string& path) {
             s.shake = clampInt(readInt(raw, s.shake), 0, 1);
         } else if (key == "skin") {
             s.skin = clampInt(readInt(raw, s.skin), 0, 5);
+        } else if (key == "master_vol") {
+            s.masterVol = clampInt(readInt(raw, s.masterVol), 0, 100);
+        } else if (key == "music_vol") {
+            s.musicVol = clampInt(readInt(raw, s.musicVol), 0, 100);
+        } else if (key == "sfx_vol") {
+            s.sfxVol = clampInt(readInt(raw, s.sfxVol), 0, 100);
+        } else if (key == "mute") {
+            s.mute = clampInt(readInt(raw, s.mute), 0, 1);
         }
     }
     return s;
@@ -100,6 +108,10 @@ void saveSettings(const Settings& s, const std::string& path) {
     out << "particles=" << s.particles << '\n';
     out << "shake=" << s.shake << '\n';
     out << "skin=" << s.skin << '\n';
+    out << "master_vol=" << s.masterVol << '\n';
+    out << "music_vol=" << s.musicVol << '\n';
+    out << "sfx_vol=" << s.sfxVol << '\n';
+    out << "mute=" << s.mute << '\n';
 }
 
 int fpsTarget(int index) {
@@ -194,6 +206,14 @@ std::string settingLabel(const Settings& s, int row) {
         }
     case RowShake:
         return s.shake != 0 ? "ON" : "OFF";
+    case RowMasterVol:
+        return std::to_string(clampInt(s.masterVol, 0, 100)) + "%";
+    case RowMusicVol:
+        return std::to_string(clampInt(s.musicVol, 0, 100)) + "%";
+    case RowSfxVol:
+        return std::to_string(clampInt(s.sfxVol, 0, 100)) + "%";
+    case RowMute:
+        return s.mute != 0 ? "ON" : "OFF";
     case RowReset:
         return "PRESS ENTER";
     default:
@@ -230,6 +250,18 @@ void adjustSetting(Settings& s, int row, int delta) {
         break;
     case RowShake:
         s.shake = (s.shake != 0) ? 0 : 1;
+        break;
+    case RowMasterVol:
+        s.masterVol = clampInt(s.masterVol + step * 5, 0, 100);
+        break;
+    case RowMusicVol:
+        s.musicVol = clampInt(s.musicVol + step * 5, 0, 100);
+        break;
+    case RowSfxVol:
+        s.sfxVol = clampInt(s.sfxVol + step * 5, 0, 100);
+        break;
+    case RowMute:
+        s.mute = (s.mute != 0) ? 0 : 1;
         break;
     case RowReset:
     default:

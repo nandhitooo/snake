@@ -155,6 +155,8 @@ struct Game {
     bool paused = false;
     bool over = false;
     bool animations = true; // decorative animation toggle (Phase 4: Settings)
+    int hoverId = -1;        // audio: last hovered UI control, so hover SFX fires once
+    bool wasBoosting = false; // audio: boost start/end edge detection
     float swallowClock = -1.0f; // seconds since the head swallowed food, <0 == idle
     float foodAge = 0.0f;       // seconds since the current food spawned
     float specialAge = 0.0f;    // seconds since the current special food spawned

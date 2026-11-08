@@ -243,6 +243,9 @@ struct Game {
     CameraMode cameraMode = CameraMode::Iso;
     Vector3 camTarget{0.0f, 0.0f, 0.0f};
     float camYaw = 0.0f;          // smoothed heading (radians) used by the third-person orbit
+    int camDirX = 1;              // last stable movement direction (grid cells)
+    int camDirZ = 0;
+    float camHeadingStable = 0.0f; // seconds the movement heading has been unchanged
     float camBlend = 0.0f;        // remaining cross-fade time after a camera-mode change
     Camera3D camFrom{};           // pose captured when the mode changed
     CameraMode camAppliedMode = CameraMode::Iso;

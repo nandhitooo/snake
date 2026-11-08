@@ -179,6 +179,9 @@ void Game::reset() {
     nextBlinkIn = 2.5f;
     trailTimer = 0.0f;
     camYaw = 0.0f;
+    camDirX = 1;
+    camDirZ = 0;
+    camHeadingStable = 0.0f;
     camBlend = 0.0f;
     camAppliedMode = cameraMode;
     spawnFood();
@@ -972,8 +975,23 @@ void Game::updateCamera(float dt) {
         }
     }
     const float yawTarget = std::atan2(moveDir.z, moveDir.x);
-    float yawDelta = wrapAngle(yawTarget - camYaw);
-    if (dt > 0.0f) {
+
+    // Comfort: the orbit only re-aligns after the heading has held for a moment.
+    // Rapid zig-zags keep resetting this timer, so the view stays put instead of
+    // swinging 90 degrees on every tick; a committed turn still eases around.
+    const int stepX = static_cast<int>(std::lround(moveDir.x));
+    const int stepZ = static_cast<int>(std::lround(moveDir.z));
+    if (stepX != camDirX || stepZ != camDirZ) {
+        camDirX = stepX;
+        camDirZ = stepZ;
+        camHeadingStable = 0.0f;
+    } else if (dt > 0.0f) {
+        camHeadingStable += dt;
+    }
+    const bool orbitAllowed = camHeadingStable >= kCamYawCommit;
+
+    if (dt > 0.0f && orbitAllowed) {
+        const float yawDelta = wrapAngle(yawTarget - camYaw);
         const float maxStep = kCamYawMaxSpeed * dt;
         float step = yawDelta * (1.0f - std::exp(-kCamYawSmoothing * dt));
         if (step > maxStep) {
@@ -1016,6 +1034,18 @@ void Game::updateCamera(float dt) {
         camTarget.y = 0.0f;
     }
 
+    // Wrapping teleports the head to the far side of the arena. In the close rig
+    // a long glide across the board is far more disorienting than a cut.
+    if (cameraMode == CameraMode::Third && mode == Mode::Playing && !snake.empty() &&
+        dt > 0.0f) {
+        const Vector3 head = visualHeadWorld(0.0f);
+        const float sx = head.x - camTarget.x;
+        const float sz = head.z - camTarget.z;
+        if (sx * sx + sz * sz > kCamFocusSnapDistance * kCamFocusSnapDistance) {
+            camTarget = Vector3{head.x, 0.0f, head.z};
+        }
+    }
+
     // --- Pose for the current mode.
     Vector3 desired{0.0f, 0.0f, 0.0f};
     Vector3 look = camTarget;
@@ -1041,8 +1071,14 @@ void Game::updateCamera(float dt) {
         break;
     }
 
-    // Phase H2/I4c: the FOV offset row shifts every rig, and boosting kicks it wider.
-    fovTarget += fovOffsetDegrees(settings.fovOffset) + boostVisual * kBoostFovKick;
+    // Phase H2/I4c: the FOV offset row shifts every rig, and boosting kicks it
+    // wider — but not in the close third-person rig, where pumping the lens adds
+    // the peripheral rush that makes players queasy.
+    float boostKick = boostVisual * kBoostFovKick;
+    if (cameraMode == CameraMode::Third) {
+        boostKick = 0.0f;
+    }
+    fovTarget += fovOffsetDegrees(settings.fovOffset) + boostKick;
 
     // A mode switch cross-fades from the pose captured at the moment of the switch.
     if (cameraMode != camAppliedMode) {

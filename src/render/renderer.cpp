@@ -983,8 +983,11 @@ void Game::draw() const {
     // Shake is a pure translation: offset the target with the position so the
     // view never swings its aim around.
     Camera3D cam = camera;
-    const float shakeOffX = shakeX * 0.02f;
-    const float shakeOffY = shakeY * 0.02f;
+    // The close third-person rig sits right next to the action, so the same nudge
+    // is amplified on screen: damp it there.
+    const float shakeScale = (cameraMode == CameraMode::Third) ? kCamShakeScaleThird : 1.0f;
+    const float shakeOffX = shakeX * 0.02f * shakeScale;
+    const float shakeOffY = shakeY * 0.02f * shakeScale;
     cam.position.x += shakeOffX;
     cam.position.y += shakeOffY;
     cam.target.x += shakeOffX;

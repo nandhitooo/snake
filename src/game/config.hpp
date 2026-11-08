@@ -50,18 +50,23 @@ inline constexpr float kCamFocusSmoothing = 7.0f;
 inline constexpr float kCamMaxSpeed = 16.0f;     // units/s ceiling for the focus (wrap glide);
                                                 // above the boosted head speed (~12.5 u/s)
 inline constexpr float kCamLookAhead = 1.2f;     // cells of forward bias (iso/top)
-inline constexpr float kCamYawSmoothing = 6.0f;  // heading smoothing for the third-person orbit
-inline constexpr float kCamYawMaxSpeed = 7.0f;   // rad/s angular ceiling
-inline constexpr float kCamThirdRadius = 7.5f;
-inline constexpr float kCamThirdHeight = 5.2f;
+inline constexpr float kCamYawSmoothing = 3.0f;  // heading smoothing for the third-person orbit
+inline constexpr float kCamYawMaxSpeed = 2.6f;   // rad/s angular ceiling; 7.0 whipped the
+                                                 // whole view around on every 90-degree turn
+inline constexpr float kCamYawCommit = 0.22f;    // heading must hold this long before the orbit turns,
+                                                 // so a zig-zag never spins the camera
+inline constexpr float kCamThirdRadius = 7.0f;
+inline constexpr float kCamThirdHeight = 6.6f;   // steeper pitch: less horizon sweeping the frame
 inline constexpr float kCamThirdMinHeight = 1.5f;
-inline constexpr float kCamThirdLookAhead = 2.5f;
-inline constexpr float kCamThirdLookY = 0.7f;
+inline constexpr float kCamThirdLookAhead = 1.8f;
+inline constexpr float kCamThirdLookY = 0.5f;
+inline constexpr float kCamFocusSnapDistance = 8.0f; // wrap: cut the focus instead of gliding across
+inline constexpr float kCamShakeScaleThird = 0.45f;  // gentler nudge in the close rig
 inline constexpr float kCamIsoHeight = 22.0f;
 inline constexpr float kCamIsoBack = 17.0f;
 inline constexpr float kCamTopHeight = 25.0f;
 inline constexpr float kCamFovIso = 45.0f;
-inline constexpr float kCamFovThird = 55.0f;
+inline constexpr float kCamFovThird = 50.0f;
 inline constexpr float kCamFovSmoothing = 9.0f;
 inline constexpr float kCamModeBlend = 0.5f;     // cross-fade time when the mode changes
 

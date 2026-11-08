@@ -16,3 +16,5 @@ dist/
 .fuse_hidden*
 snake.xml
 graphify-out/
+# Runtime preferences written by the game
+settings.cfg

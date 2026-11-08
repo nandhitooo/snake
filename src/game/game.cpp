@@ -625,8 +625,9 @@ void Game::spawnParticles(Vector3 pos, Color color, int count, float speed, floa
     std::uniform_real_distribution<float> distUp(0.15f, 1.0f);
 
     const float scale = particleScale(settings.particles);
+    const int cap = std::max(0, static_cast<int>(std::lround(kMaxParticles * scale)));
     const int scaled = std::max(0, static_cast<int>(std::lround(static_cast<float>(count) * scale)));
-    for (int i = 0; i < scaled; ++i) {
+    for (int i = 0; i < scaled && static_cast<int>(particles.size()) < cap; ++i) {
         const float ang = distAngle(rng);
         const float spd = distSpd(rng);
         WorldParticle p;
@@ -682,6 +683,16 @@ void Game::updateVfx(float dt) {
             clearArmed = false;
             clearArmTimer = 0.0f;
         }
+    }
+    // Phase H: the smoothed boost drives the FOV kick and the post-process uniform,
+    // and the flash pulse decays fast after a special bite or a game over.
+    const float boostTarget = boostActive() ? 1.0f : 0.0f;
+    if (dt > 0.0f) {
+        boostVisual += (boostTarget - boostVisual) * (1.0f - std::exp(-9.0f * dt));
+    }
+    boostVisual = std::clamp(boostVisual, 0.0f, 1.0f);
+    if (flashPulse > 0.0f) {
+        flashPulse = std::max(0.0f, flashPulse - dt * kFlashDecay);
     }
     updateBlink(dt);
 
@@ -983,6 +994,9 @@ void Game::updateCamera(float dt) {
         break;
     }
 
+    // Phase H2/I4c: the FOV offset row shifts every rig, and boosting kicks it wider.
+    fovTarget += fovOffsetDegrees(settings.fovOffset) + boostVisual * kBoostFovKick;
+
     // A mode switch cross-fades from the pose captured at the moment of the switch.
     if (cameraMode != camAppliedMode) {
         camFrom = camera;
@@ -1038,6 +1052,7 @@ void Game::resolvePendingBites() {
     }
     for (const PendingBite& bite : pendingBites) {
         if (bite.special) {
+            flashPulse = std::max(flashPulse, 0.7f); // big event: brief screen flash
             spawnParticles(bite.pos, kSpecial, 22, 5.5f, 0.18f, 0.6f);
             spawnParticles(bite.pos, kSpecialHalo, 12, 4.0f, 0.13f, 0.5f);
             spawnParticles(bite.pos, bite.good ? kGood : kBad, 10, 4.8f, 0.14f, 0.55f);
@@ -1429,6 +1444,7 @@ void Game::gameOver() {
         nameBuffer.clear();
         nameRank = board.rankFor(score);
     }
+    flashPulse = 1.0f;
     triggerShake(0.35f, 4.5f);
     overFade = animations ? 0.0f : 1.0f;
     if (!snake.empty()) {

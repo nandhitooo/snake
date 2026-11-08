@@ -75,20 +75,47 @@ int main() {
     int canvasPxW = 0;
     int canvasPxH = 0;
 
-    // FXAA (Low/Medium quality). Any failure just disables it, silently.
-    Shader fxaa{};
-    bool fxaaReady = false;
-    int fxaaResLoc = -1;
+    // Post-process (Phase H3): one pass doing FXAA + bloom + vignette + chromatic
+    // aberration. A failed load falls back to the plain FXAA shader, then to no
+    // shader at all: any failure just degrades the look, never stops the game.
+    Shader post{};
+    bool postReady = false;
+    bool postFull = false;
+    int postResLoc = -1;
+    int postFxaaLoc = -1;
+    int postBloomLoc = -1;
+    int postVignetteLoc = -1;
+    int postBoostLoc = -1;
+    int postFlashLoc = -1;
+    int postTimeLoc = -1;
     {
-        const std::string path = resolveAssetPath("assets/shaders/fxaa.fs");
-        if (!path.empty()) {
-            SetTraceLogLevel(LOG_NONE);
-            fxaa = LoadShader(nullptr, path.c_str());
-            SetTraceLogLevel(LOG_INFO);
-            if (shaderUsable(fxaa)) {
-                fxaaResLoc = GetShaderLocation(fxaa, "resolution");
-                fxaaReady = fxaaResLoc >= 0;
+        const auto loadFrom = [](const char* relative, Shader& out) {
+            const std::string path = resolveAssetPath(relative);
+            if (path.empty()) {
+                return false;
             }
+            SetTraceLogLevel(LOG_NONE);
+            out = LoadShader(nullptr, path.c_str());
+            SetTraceLogLevel(LOG_INFO);
+            return shaderUsable(out);
+        };
+
+        Shader candidate{};
+        if (loadFrom("assets/shaders/post.fs", candidate)) {
+            post = candidate;
+            postFull = true;
+            postResLoc = GetShaderLocation(post, "resolution");
+            postReady = postResLoc >= 0;
+            postFxaaLoc = GetShaderLocation(post, "fxaaOn");
+            postBloomLoc = GetShaderLocation(post, "bloomStrength");
+            postVignetteLoc = GetShaderLocation(post, "vignetteStrength");
+            postBoostLoc = GetShaderLocation(post, "boost");
+            postFlashLoc = GetShaderLocation(post, "flash");
+            postTimeLoc = GetShaderLocation(post, "time");
+        } else if (loadFrom("assets/shaders/fxaa.fs", candidate)) {
+            post = candidate;
+            postResLoc = GetShaderLocation(post, "resolution");
+            postReady = postResLoc >= 0;
         }
     }
 
@@ -125,9 +152,9 @@ int main() {
             canvasValid = canvas.id != 0;
             canvasPxW = texW;
             canvasPxH = texH;
-            if (fxaaReady) {
+            if (postReady && postResLoc >= 0) {
                 const float res[2] = {static_cast<float>(texW), static_cast<float>(texH)};
-                SetShaderValue(fxaa, fxaaResLoc, res, SHADER_UNIFORM_VEC2);
+                SetShaderValue(post, postResLoc, res, SHADER_UNIFORM_VEC2);
             }
         }
 
@@ -172,15 +199,43 @@ int main() {
         game.uiScale = renderS;
         applyUiScale(renderS);     // virtual 960x540 coordinates -> S x texture pixels
         rlSetLineWidth(renderS);   // 1-px GL lines would otherwise get thinner with S
+
         game.draw();
+        if (game.settings.showFps != 0) {
+            const char* fps = TextFormat("FPS: %d", GetFPS());
+            constexpr float fpsSize = 10.0f;
+            const float fpsW = uiMeasure(fps, fpsSize);
+            uiText(fps, static_cast<float>(kWinW) - fpsW - 8.0f, 6.0f, fpsSize,
+                   Color{150, 205, 160, 220});
+        }
         EndTextureMode();
         rlSetLineWidth(1.0f);
 
-        const bool useFxaa = fxaaReady && game.settings.renderQuality <= 1;
+        // Per-frame post uniforms. A uniform the driver optimised away reports -1
+        // and is skipped, so the shader can evolve without breaking the game.
+        if (postReady && postFull) {
+            const auto setFloat = [&post](int loc, float value) {
+                if (loc >= 0) {
+                    SetShaderValue(post, loc, &value, SHADER_UNIFORM_FLOAT);
+                }
+            };
+            setFloat(postFxaaLoc, game.settings.fxaa != 0 ? 1.0f : 0.0f);
+            const float bloom = (game.settings.bloom == 2)   ? 1.8f
+                                : (game.settings.bloom == 1) ? 0.9f
+                                                             : 0.0f;
+            setFloat(postBloomLoc, bloom);
+            setFloat(postVignetteLoc, game.settings.vignette != 0 ? 0.55f : 0.0f);
+            setFloat(postBoostLoc, game.boostVisual);
+            setFloat(postFlashLoc, game.flashPulse);
+            setFloat(postTimeLoc, static_cast<float>(GetTime()));
+        }
+
+        // With only fxaa.fs available the FXAA row still decides whether it runs.
+        const bool usePost = postReady && (postFull || game.settings.fxaa != 0);
         BeginDrawing();
         ClearBackground(BLACK);
-        if (useFxaa) {
-            BeginShaderMode(fxaa);
+        if (usePost) {
+            BeginShaderMode(post);
         }
         DrawTexturePro(canvas.texture,
                        Rectangle{0.0f, 0.0f, static_cast<float>(canvasPxW),
@@ -188,7 +243,7 @@ int main() {
                        Rectangle{offset.x, offset.y, static_cast<float>(kWinW) * scale,
                                  static_cast<float>(kWinH) * scale},
                        Vector2{0.0f, 0.0f}, 0.0f, WHITE);
-        if (useFxaa) {
+        if (usePost) {
             EndShaderMode();
         }
         EndDrawing();
@@ -196,8 +251,8 @@ int main() {
 
     audio.shutdown();
     uiTextShutdown();
-    if (fxaaReady) {
-        UnloadShader(fxaa);
+    if (postReady) {
+        UnloadShader(post);
     }
     if (canvasValid) {
         UnloadRenderTexture(canvas);

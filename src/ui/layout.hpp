@@ -76,9 +76,12 @@ inline Rectangle menuSettingsRect() { return Rectangle{340.0f, 340.0f, 280.0f, 4
 inline Rectangle menuFullscreenRect() { return Rectangle{340.0f, 384.0f, 280.0f, 40.0f}; }
 inline Rectangle menuQuitRect() { return Rectangle{340.0f, 428.0f, 280.0f, 40.0f}; }
 
-// Settings screen rows (15) and its back button.
+// Settings screen: three tabs, then up to 14 rows (GRAPHICS) and the back button.
+inline Rectangle settingsTabRect(int index) {
+    return Rectangle{200.0f + static_cast<float>(index) * 190.0f, 92.0f, 180.0f, 28.0f};
+}
 inline Rectangle settingsRowRect(int index) {
-    return Rectangle{200.0f, 102.0f + static_cast<float>(index) * 22.0f, 560.0f, 20.0f};
+    return Rectangle{200.0f, 136.0f + static_cast<float>(index) * 21.0f, 560.0f, 20.0f};
 }
 inline Rectangle settingsBackRect() { return Rectangle{380.0f, 452.0f, 200.0f, 40.0f}; }
 
@@ -112,12 +115,16 @@ inline void validateLayout() {
                                    menuSettingsRect(),   menuFullscreenRect(), menuQuitRect()};
     checkScreenRects("menu", menuRects, 6);
 
-    Rectangle settingsRects[kSettingRowCount + 1];
-    for (int i = 0; i < kSettingRowCount; ++i) {
+    const Rectangle tabRects[kSettingTabCount] = {settingsTabRect(0), settingsTabRect(1),
+                                                  settingsTabRect(2)};
+    checkScreenRects("settings-tabs", tabRects, kSettingTabCount);
+
+    Rectangle settingsRects[kMaxSettingsRowsPerTab + 1];
+    for (int i = 0; i < kMaxSettingsRowsPerTab; ++i) {
         settingsRects[i] = settingsRowRect(i);
     }
-    settingsRects[kSettingRowCount] = settingsBackRect();
-    checkScreenRects("settings", settingsRects, kSettingRowCount + 1);
+    settingsRects[kMaxSettingsRowsPerTab] = settingsBackRect();
+    checkScreenRects("settings", settingsRects, kMaxSettingsRowsPerTab + 1);
 
     Rectangle skinRects[kSkinCount + 1];
     for (int i = 0; i < kSkinCount; ++i) {

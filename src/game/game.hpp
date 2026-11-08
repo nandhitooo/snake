@@ -189,6 +189,8 @@ struct Game {
     float overFade = 0.0f;      // 0..1 fade-in of the game-over overlay
     float transitionT = 0.0f;   // 0..1 full-screen fade after a mode change
     float trailTimer = 0.0f;    // throttle for skin trail particles
+    float boostVisual = 0.0f;   // 0..1 smoothed boost (FOV kick, post shader, speed lines)
+    float flashPulse = 0.0f;    // 0..1 decaying screen flash (special bite, game over)
     bool quit = false;
     Mode mode = Mode::Menu;
     bool fsRequest = false;
@@ -198,6 +200,7 @@ struct Game {
 
     // Persisted options + settings-screen state
     Settings settings;
+    int settingsTab = TabGraphics; // Phase H: GRAPHICS | GAMEPLAY | AUDIO
     int settingsIndex = 0;
     Mode settingsReturn = Mode::Menu;
     bool windowSettingsDirty = false;

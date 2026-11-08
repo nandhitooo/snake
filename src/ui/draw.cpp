@@ -5,6 +5,7 @@
 #include "render/translucent.hpp"
 #include "ui/layout.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -14,24 +15,38 @@ namespace {
 
 const char* settingName(int row) {
     switch (row) {
+    case RowPreset:
+        return "GRAPHICS PRESET";
     case RowResolution:
         return "RESOLUTION";
-    case RowFullscreen:
-        return "FULLSCREEN";
+    case RowDisplayMode:
+        return "DISPLAY MODE";
     case RowVSync:
         return "VSYNC";
     case RowFps:
         return "FPS LIMIT";
     case RowRenderQuality:
         return "RENDER QUALITY";
+    case RowFxaa:
+        return "FXAA";
+    case RowBloom:
+        return "BLOOM";
+    case RowVignette:
+        return "VIGNETTE";
+    case RowShadows:
+        return "SHADOWS";
+    case RowParticles:
+        return "PARTICLES";
+    case RowFov:
+        return "CAMERA FOV OFFSET";
+    case RowShowFps:
+        return "SHOW FPS";
     case RowSpeed:
         return "GAME SPEED";
     case RowCamera:
         return "CAMERA";
     case RowAnimations:
         return "ANIMATIONS";
-    case RowParticles:
-        return "PARTICLES";
     case RowShake:
         return "SCREEN SHAKE";
     case RowMasterVol:
@@ -431,13 +446,35 @@ void Game::drawSettings() const {
     uiText(title, (kWinW - titleW) / 2 + 2, 42, titleSize, Color{28, 62, 48, 255});
     uiText(title, (kWinW - titleW) / 2, 40, titleSize, kSnakeHead);
 
-    const Rectangle card{160.0f, 94.0f, 640.0f, 344.0f};
+    // Phase H1: GRAPHICS | GAMEPLAY | AUDIO tab bar.
+    for (int t = 0; t < kSettingTabCount; ++t) {
+        const Rectangle tab = ui::settingsTabRect(t);
+        const bool active = (t == settingsTab);
+        const bool hovered = CheckCollisionPointRec(uiMouse, tab);
+        DrawRectangleRounded(tab, 0.4f, 6,
+                             active ? Color{34, 62, 50, 255}
+                                    : (hovered ? Color{34, 40, 56, 255}
+                                               : Color{23, 27, 38, 255}));
+        DrawRectangleRoundedLinesEx(tab, 0.4f, 6, active ? 1.8f : 1.0f,
+                                    active ? kSnakeHead : Color{55, 62, 82, 255});
+        const char* tabName = settingsTabName(t);
+        const float tabSize = uiTextFit(tabName, tab.width - 16.0f, 13.0f);
+        const float tabW = uiMeasure(tabName, tabSize);
+        uiText(tabName, tab.x + (tab.width - tabW) * 0.5f,
+               tab.y + (tab.height - tabSize) * 0.5f, tabSize,
+               active ? kText : Color{170, 180, 200, 255});
+    }
+
+    const Rectangle card{160.0f, 128.0f, 640.0f, 312.0f};
     DrawRectangleRounded(card, 0.06f, 10, Color{22, 25, 36, 242});
     DrawRectangleRoundedLinesEx(card, 0.06f, 10, 1.6f, Color{55, 62, 82, 255});
 
-    for (int i = 0; i < kSettingRowCount; ++i) {
+    const int rowCount = settingsRowCount(settingsTab);
+    const int selectedIndex = std::min(settingsIndex, std::max(0, rowCount - 1));
+    for (int i = 0; i < rowCount; ++i) {
         const Rectangle row = ui::settingsRowRect(i);
-        const bool selected = (i == settingsIndex);
+        const int rowId = settingsRowAt(settingsTab, i);
+        const bool selected = (i == selectedIndex);
         const bool hovered = CheckCollisionPointRec(uiMouse, row);
         Color fill{26, 30, 42, 255};
         if (selected) {
@@ -452,15 +489,15 @@ void Game::drawSettings() const {
 
         const float zoneL = row.x + row.width - 200.0f;
         const float zoneR = row.x + row.width - 36.0f;
-        const char* name = settingName(i);
+        const char* name = settingName(rowId);
         const float nameSize = uiTextFit(name, zoneL - (row.x + 14.0f) - 8.0f, 12.0f);
         uiText(name, row.x + 14.0f, row.y + 4.0f, nameSize,
                selected ? kText : Color{180, 190, 210, 255});
 
-        const std::string value = settingLabel(settings, i);
+        const std::string value = settingLabel(settings, rowId);
         const float valueSize = uiTextFit(value.c_str(), zoneR - zoneL - 24.0f, 12.0f);
         const float valueW = uiMeasure(value.c_str(), valueSize);
-        if (i != RowReset) {
+        if (rowId != RowReset) {
             uiText("<", static_cast<int>(zoneL), static_cast<int>(row.y + 3), 13,
                      selected ? kCyan : Color{110, 120, 140, 255});
             uiText(">", static_cast<int>(zoneR), static_cast<int>(row.y + 3), 13,
@@ -473,7 +510,8 @@ void Game::drawSettings() const {
     drawButton(ui::settingsBackRect(), "BACK", true, false,
                CheckCollisionPointRec(uiMouse, ui::settingsBackRect()));
 
-    const char* hint = "UP/DOWN select  |  LEFT/RIGHT change  |  M mute  |  ESC back";
+    const char* hint =
+        "TAB / Q / E switch tab  |  UP/DOWN select  |  LEFT/RIGHT change  |  ESC back";
     constexpr int hintSize = 12;
     const int hintW = uiMeasure(hint, hintSize);
     uiText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});

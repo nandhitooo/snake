@@ -23,6 +23,15 @@ struct Settings {
     int sfxVol = 80;    // percent
     int mute = 0;       // 0/1
     std::string playerName = "PLAYER"; // last name submitted to the high-score table
+
+    // Phase H: graphics options. Every field is a plain int so a broken
+    // settings.cfg is clamped instead of crashing.
+    int fxaa = 1;      // 0/1, independent of Render Quality now
+    int bloom = 0;     // 0=off, 1=low, 2=high
+    int vignette = 1;  // 0/1
+    int shadows = 1;   // 0/1, contact shadows under apples / rivals / the snake
+    int fovOffset = 2; // index into kFovOffsets (default 0 degrees)
+    int showFps = 0;   // 0/1
 };
 
 struct Resolution {
@@ -39,17 +48,27 @@ inline constexpr Resolution kResolutions[kResolutionCount] = {
     {1920, 1080, "1920 x 1080"},
 };
 
-// Settings rows, in the order the Settings screen lists them.
+// Phase H: three settings tabs. settingsIndex addresses a slot inside the active
+// tab, so every tab can fit on one screen without moving rows off the canvas.
+enum SettingTab { TabGraphics = 0, TabGameplay, TabAudio, kSettingTabCount };
+
 enum SettingRow {
-    RowResolution = 0,
-    RowFullscreen,
+    RowPreset = 0,
+    RowResolution,
+    RowDisplayMode,
     RowVSync,
     RowFps,
     RowRenderQuality,
+    RowFxaa,
+    RowBloom,
+    RowVignette,
+    RowShadows,
+    RowParticles,
+    RowFov,
+    RowShowFps,
     RowSpeed,
     RowCamera,
     RowAnimations,
-    RowParticles,
     RowShake,
     RowMasterVol,
     RowMusicVol,
@@ -59,11 +78,38 @@ enum SettingRow {
     kSettingRowCount
 };
 
+// The widest tab (GRAPHICS) has 14 rows: 136 + 13*21 + 20 = 429 px.
+inline constexpr int kMaxSettingsRowsPerTab = 14;
+
+// Camera FOV offset choices in degrees, added on top of every camera mode.
+inline constexpr int kFovOffsetCount = 6;
+inline constexpr int kFovOffsets[kFovOffsetCount] = {-10, -5, 0, 5, 10, 15};
+inline constexpr int kDefaultFovOffset = 2;
+
+// Graphics presets: 0 Low, 1 Medium, 2 High, 3 Ultra, 4 Custom (derived only).
+inline constexpr int kPresetLow = 0;
+inline constexpr int kPresetMedium = 1;
+inline constexpr int kPresetHigh = 2;
+inline constexpr int kPresetUltra = 3;
+inline constexpr int kPresetCustom = 4;
+inline constexpr int kPresetCount = 5;
+
 Settings loadSettings(const std::string& path = "settings.cfg");
 void saveSettings(const Settings& s, const std::string& path = "settings.cfg");
 
 std::string settingLabel(const Settings& s, int row);
 void adjustSetting(Settings& s, int row, int delta);
+
+// Per-tab row lists (the GRAPHICS/GAMEPLAY/AUDIO tabs).
+int settingsRowCount(int tab);
+int settingsRowAt(int tab, int index);
+const char* settingsTabName(int tab);
+
+// Preset helpers: applyPreset writes the group, detectPreset derives the row value
+// (Custom whenever the individual graphics rows no longer match a preset).
+void applyPreset(Settings& s, int preset);
+int detectPreset(const Settings& s);
+float fovOffsetDegrees(int index);
 
 int fpsTarget(int index);
 float speedTickScale(int speed);

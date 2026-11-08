@@ -171,6 +171,11 @@ inline constexpr float kRenderScaleMin = 1.0f;
 inline constexpr float kRenderScaleMax = 3.0f;
 inline constexpr int kRenderMaxTexSide = 4096;    // longest texture side, in pixels
 
+// Phase H/I effect limits and tuning.
+inline constexpr int kMaxParticles = 1500;   // global cap, multiplied by particleScale
+inline constexpr float kFlashDecay = 4.0f;   // flash uniform fade-out per second
+inline constexpr float kBoostFovKick = 6.0f; // extra FOV while boosting
+
 // Palette
 inline const Color kBg{14, 14, 20, 255};
 inline const Color kHudBg{26, 28, 38, 255};

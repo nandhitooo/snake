@@ -32,7 +32,10 @@ int hoverTarget(const Game& g, const Vector2& m) {
         if (CheckCollisionPointRec(m, ui::highScoresClearRect())) return 3301;
         return -1;
     case Mode::Settings:
-        for (int i = 0; i < kSettingRowCount; ++i) {
+        for (int t = 0; t < kSettingTabCount; ++t) {
+            if (CheckCollisionPointRec(m, ui::settingsTabRect(t))) return 2200 + t;
+        }
+        for (int i = 0; i < settingsRowCount(g.settingsTab); ++i) {
             if (CheckCollisionPointRec(m, ui::settingsRowRect(i))) return 2000 + i;
         }
         if (CheckCollisionPointRec(m, ui::settingsBackRect())) return 2100;
@@ -120,7 +123,15 @@ void Game::handleInput() {
         return;
     }
     if (mode == Mode::Settings) {
-        const int count = kSettingRowCount;
+        // Q / E / TAB switch tabs; each tab keeps its own row list.
+        if (IsKeyPressed(KEY_TAB) || IsKeyPressed(KEY_Q) || IsKeyPressed(KEY_E)) {
+            const int dir = IsKeyPressed(KEY_Q) ? -1 : 1;
+            settingsTab = (settingsTab + dir + kSettingTabCount) % kSettingTabCount;
+            settingsIndex = 0;
+            audio.play(SfxId::MenuClick);
+            return;
+        }
+        const int count = settingsRowCount(settingsTab);
         if (IsKeyPressed(KEY_UP)) {
             settingsIndex = (settingsIndex + count - 1) % count;
         }
@@ -139,10 +150,14 @@ void Game::handleInput() {
         }
         if (delta != 0) {
             audio.play(SfxId::MenuClick);
-            if (settingsIndex == RowReset) {
+            const int row = settingsRowAt(settingsTab, settingsIndex);
+            if (row == RowReset) {
+                // Reset every tab, but never the remembered player name.
+                const std::string last = settings.playerName;
                 settings = Settings{};
+                settings.playerName = last;
             } else {
-                adjustSetting(settings, settingsIndex, delta);
+                adjustSetting(settings, row, delta);
             }
             applySettings();
             persistSettings();
@@ -251,7 +266,16 @@ void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
                 transitionT = animations ? 1.0f : 0.0f;
                 return;
             }
-            for (int i = 0; i < kSettingRowCount; ++i) {
+            for (int t = 0; t < kSettingTabCount; ++t) {
+                if (CheckCollisionPointRec(mouse, ui::settingsTabRect(t))) {
+                    audio.play(SfxId::MenuClick);
+                    settingsTab = t;
+                    settingsIndex = 0;
+                    return;
+                }
+            }
+            const int rowCount = settingsRowCount(settingsTab);
+            for (int i = 0; i < rowCount; ++i) {
                 const Rectangle row = ui::settingsRowRect(i);
                 if (!CheckCollisionPointRec(mouse, row)) {
                     continue;
@@ -259,10 +283,13 @@ void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
                 settingsIndex = i;
                 audio.play(SfxId::MenuClick);
                 const int delta = (mouse.x < row.x + row.width * 0.5f) ? -1 : 1;
-                if (i == RowReset) {
+                const int rowId = settingsRowAt(settingsTab, i);
+                if (rowId == RowReset) {
+                    const std::string last = settings.playerName;
                     settings = Settings{};
+                    settings.playerName = last;
                 } else {
-                    adjustSetting(settings, i, delta);
+                    adjustSetting(settings, rowId, delta);
                 }
                 applySettings();
                 persistSettings();

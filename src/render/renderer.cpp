@@ -109,10 +109,13 @@ void drawApple(const Game& g, render::TranslucentQueue& q) {
     }
     const Vector3 c{base.x, 0.55f * pop + bob, base.z};
 
-    // Contact shadow keeps the apple visually grounded.
-    q.add(Vector3{base.x, kLayerShadow, base.z}, [base] {
-        DrawPlane(Vector3{base.x, kLayerShadow, base.z}, Vector2{0.7f, 0.7f}, Color{0, 0, 0, 70});
-    });
+    // Contact shadow keeps the apple visually grounded (Phase H2: SHADOWS row).
+    if (g.settings.shadows != 0) {
+        q.add(Vector3{base.x, kLayerShadow, base.z}, [base] {
+            DrawPlane(Vector3{base.x, kLayerShadow, base.z}, Vector2{0.7f, 0.7f},
+                      Color{0, 0, 0, 70});
+        });
+    }
 
     DrawSphereEx(c, 0.4f * pop, kFoodRings, kFoodSlices, kFood);
     DrawSphereEx(vadd(c, vmul(Vector3{-0.13f, 0.14f, 0.12f}, pop)), 0.085f * pop, kEyeRings,
@@ -136,9 +139,12 @@ void drawSpecialFood(const Game& g, render::TranslucentQueue& q) {
     const Vector3 c{base.x, (0.68f + (g.animations ? 0.05f * std::sin(g.animTime * 3.4f) : 0.0f)) * 1.0f,
                     base.z};
 
-    q.add(Vector3{base.x, kLayerShadow, base.z}, [base] {
-        DrawPlane(Vector3{base.x, kLayerShadow, base.z}, Vector2{0.9f, 0.9f}, Color{0, 0, 0, 80});
-    });
+    if (g.settings.shadows != 0) {
+        q.add(Vector3{base.x, kLayerShadow, base.z}, [base] {
+            DrawPlane(Vector3{base.x, kLayerShadow, base.z}, Vector2{0.9f, 0.9f},
+                      Color{0, 0, 0, 80});
+        });
+    }
 
     // Halo shell (translucent pass) + orbiting gold motes (solid).
     const float haloRadius = (0.6f + 0.06f * pulse) * pop;
@@ -191,10 +197,12 @@ void drawObstacles(const Game& g, render::TranslucentQueue& q) {
         const Vector3 base = cellToWorld(o.cell, 0.0f);
         const Vector3 center{base.x, h * 0.5f, base.z};
 
-        q.add(Vector3{base.x, kLayerShadow, base.z}, [base] {
-            DrawPlane(Vector3{base.x, kLayerShadow, base.z}, Vector2{0.9f, 0.9f},
-                      Color{0, 0, 0, 70});
-        });
+        if (g.settings.shadows != 0) {
+            q.add(Vector3{base.x, kLayerShadow, base.z}, [base] {
+                DrawPlane(Vector3{base.x, kLayerShadow, base.z}, Vector2{0.9f, 0.9f},
+                          Color{0, 0, 0, 70});
+            });
+        }
 
         const auto drawBlock = [base, center, h, a, edgeA] {
             DrawCubeV(center, Vector3{0.86f, h, 0.86f},
@@ -613,6 +621,22 @@ void drawSnakeGlow(const Game& g, render::TranslucentQueue& q) {
     }
 }
 
+// Phase H2: one soft contact patch per segment, skipped when SHADOWS is off.
+void drawSnakeShadow(const Game& g, render::TranslucentQueue& q) {
+    if (g.settings.shadows == 0) {
+        return;
+    }
+    const BodyRig rig(g);
+    for (size_t i = 0; i < rig.n; ++i) {
+        const Vector3 p = rig.bodyPoint(i);
+        const float r = rig.radiusAt(i) * 0.9f;
+        q.add(Vector3{p.x, kLayerShadow, p.z}, [p, r] {
+            DrawPlane(Vector3{p.x, kLayerShadow, p.z}, Vector2{r * 2.0f, r * 2.0f},
+                      Color{0, 0, 0, 55});
+        });
+    }
+}
+
 void drawGhosts(const Game& g, render::TranslucentQueue& q) {
     for (const GhostHead& ghost : g.ghosts) {
         q.add(cellToWorld(ghost.cell, 0.6f), [&g, &ghost] { g.drawGhostHead(ghost); });
@@ -824,6 +848,7 @@ void Game::draw() const {
     drawPendingBites(*this, translucent);
     // With animation on, the body is gone on game over: it burst into shards.
     if (!(over && animations)) {
+        drawSnakeShadow(*this, translucent);
         drawSnakeBody(*this);
         drawSnakeGlow(*this, translucent);
     }

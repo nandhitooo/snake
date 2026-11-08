@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/config.hpp"
+#include "game/highscore.hpp"
 #include "game/settings.hpp"
 #include "game/skins.hpp"
 
@@ -23,7 +24,7 @@ enum class Dir { Up, Down, Left, Right };
 
 enum class Effect { Bonus, Slow, Haste, Grow, Trim, Cleanse, Curse };
 
-enum class Mode { Menu, Playing, Settings, Skins };
+enum class Mode { Menu, Playing, Settings, Skins, HighScores };
 
 // Camera rigs available while playing (C cycles through them).
 enum class CameraMode { Iso, Top, Third };
@@ -203,7 +204,18 @@ struct Game {
     float normalTick = kNormalTick;
     bool shakeEnabled = true;
     int score = 0;
-    int highScore = 0; // session only
+    int highScore = 0; // best of the persistent board (Phase G)
+
+    // Phase G: persistent high scores, name prompt and the CLEAR confirmation.
+    HighScoreBoard board;
+    bool enteringName = false;  // the game-over name prompt is open
+    std::string nameBuffer;     // characters typed so far (max kMaxPlayerName)
+    int nameRank = 0;           // 1-based rank of this round, 0 = did not qualify
+    bool scoreSaved = false;    // one round inserts at most one entry
+    int highlightRank = -1;     // row highlighted on the High Scores screen
+    bool newBestThisRound = false;
+    bool clearArmed = false;    // two-step CLEAR confirmation
+    float clearArmTimer = 0.0f; // seconds left to confirm
     float survival = 0.0f;
     int scoredSeconds = 0;
     float obstacleTimer = 0.0f;
@@ -299,7 +311,12 @@ struct Game {
     void drawMenu() const;
     void drawSettings() const;
     void drawSkins() const;
+    void drawHighScores() const;
     void draw() const;
+
+    // Phase G: game-over name entry and the single insert per round.
+    void handleNameEntry();
+    void submitRoundScore(const std::string& name);
 };
 
 } // namespace snake

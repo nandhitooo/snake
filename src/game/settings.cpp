@@ -1,6 +1,7 @@
 #include "game/settings.hpp"
 
 #include "game/config.hpp"
+#include "game/highscore.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -91,6 +92,8 @@ Settings loadSettings(const std::string& path) {
             s.sfxVol = clampInt(readInt(raw, s.sfxVol), 0, 100);
         } else if (key == "mute") {
             s.mute = clampInt(readInt(raw, s.mute), 0, 1);
+        } else if (key == "player_name") {
+            s.playerName = sanitizePlayerName(raw);
         }
     }
     return s;
@@ -117,6 +120,7 @@ void saveSettings(const Settings& s, const std::string& path) {
     out << "music_vol=" << s.musicVol << '\n';
     out << "sfx_vol=" << s.sfxVol << '\n';
     out << "mute=" << s.mute << '\n';
+    out << "player_name=" << s.playerName << '\n';
 }
 
 int fpsTarget(int index) {

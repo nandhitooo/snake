@@ -761,6 +761,15 @@ void Game::draw() const {
         return;
     }
 
+    if (mode == Mode::HighScores) {
+        drawHighScores();
+        if (transitionT > 0.0f) {
+            DrawRectangle(0, 0, kWinW, kWinH,
+                          Color{8, 9, 14, static_cast<unsigned char>(255.0f * transitionT)});
+        }
+        return;
+    }
+
     if (mode == Mode::Skins) {
         drawSkins();
         if (transitionT > 0.0f) {
@@ -926,7 +935,7 @@ void Game::draw() const {
     uiText(TextFormat("%d", score), kPanelX + 30, kPanelY + 22, 19, kText);
 
     DrawCircle(kPanelX + 130, kPanelY + 16, 4.0f, kGold);
-    uiText("HIGH SCORE", kPanelX + 140, kPanelY + 10, 10, Color{180, 170, 120, 255});
+    uiText("BEST", kPanelX + 140, kPanelY + 10, 10, Color{180, 170, 120, 255});
     uiText(TextFormat("%d", highScore), kPanelX + 140, kPanelY + 22, 19, kGold);
 
     const int length = static_cast<int>(snake.size());
@@ -1068,19 +1077,46 @@ void Game::draw() const {
         const Rectangle p2{modal.x + modal.width - cardW - 24, cardY, cardW, cardH};
         DrawRectangleRounded(p2, 0.2f, 6, Color{30, 34, 48, 255});
         DrawRectangleRoundedLinesEx(p2, 0.2f, 6, 1.0f, Color{55, 64, 88, 255});
-        uiText("SESSION BEST", static_cast<int>(p2.x + 14), static_cast<int>(p2.y + 12), 11,
+        uiText(nameRank > 0 ? TextFormat("BEST  -  RANK #%d", nameRank) : "BEST",
+                 static_cast<int>(p2.x + 14), static_cast<int>(p2.y + 12), 11,
                  Color{180, 170, 130, 255});
         const std::string hVal = std::to_string(highScore);
         uiText(hVal.c_str(), static_cast<int>(p2.x + 14), static_cast<int>(p2.y + 32), 28, kGold);
 
-        const std::string lenText = "Final Snake Length: " + std::to_string(length);
-        const int lenW = uiMeasure(lenText.c_str(), 14);
-        uiText(lenText.c_str(), static_cast<int>(modal.x + (modal.width - lenW) * 0.5f),
-                 static_cast<int>(cardY + cardH + 18), 14, Color{170, 180, 200, 255});
+        if (enteringName) {
+            const std::string prompt = "NEW HIGH SCORE  -  TYPE YOUR NAME";
+            const float pw = uiMeasure(prompt.c_str(), 13);
+            uiText(prompt.c_str(), static_cast<int>(modal.x + (modal.width - pw) * 0.5f),
+                     static_cast<int>(cardY + cardH + 10), 13, kCyan);
 
-        const float actionY = modal.y + modal.height - 48.0f;
-        drawKeycap(modal.x + 45.0f, actionY, "R", "Play Again");
-        drawKeycap(modal.x + 225.0f, actionY, "ESC", "Main Menu");
+            const Rectangle input{modal.x + 70.0f, modal.y + 224.0f, modal.width - 140.0f, 32.0f};
+            DrawRectangleRounded(input, 0.25f, 6, Color{16, 19, 27, 255});
+            DrawRectangleRoundedLinesEx(input, 0.25f, 6, 1.6f, kCyan);
+
+            const bool caretOn = std::fmod(animTime, 1.0f) < 0.55f;
+            std::string shown = nameBuffer.empty() ? std::string(caretOn ? "_" : " ") : nameBuffer;
+            if (!nameBuffer.empty() && caretOn) {
+                shown += "_";
+            }
+            constexpr float nameSize = 20.0f;
+            const float nameW = uiMeasure(shown.c_str(), nameSize);
+            uiText(shown.c_str(), static_cast<int>(input.x + (input.width - nameW) * 0.5f),
+                     static_cast<int>(input.y + 5.0f), nameSize, kGold);
+
+            const std::string hint = "ENTER save   ESC skip (" + settings.playerName + ")";
+            const float hw = uiMeasure(hint.c_str(), 11);
+            uiText(hint.c_str(), static_cast<int>(modal.x + (modal.width - hw) * 0.5f),
+                     static_cast<int>(input.y + 40.0f), 11, Color{140, 150, 170, 255});
+        } else {
+            const std::string lenText = "Final Snake Length: " + std::to_string(length);
+            const int lenW = uiMeasure(lenText.c_str(), 14);
+            uiText(lenText.c_str(), static_cast<int>(modal.x + (modal.width - lenW) * 0.5f),
+                     static_cast<int>(cardY + cardH + 18), 14, Color{170, 180, 200, 255});
+
+            const float actionY = modal.y + modal.height - 48.0f;
+            drawKeycap(modal.x + 45.0f, actionY, "R", "Play Again");
+            drawKeycap(modal.x + 225.0f, actionY, "ESC", "Main Menu");
+        }
     }
 
     if (transitionT > 0.0f) {

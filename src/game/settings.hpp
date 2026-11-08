@@ -22,6 +22,7 @@ struct Settings {
     int musicVol = 50;  // percent
     int sfxVol = 80;    // percent
     int mute = 0;       // 0/1
+    std::string playerName = "PLAYER"; // last name submitted to the high-score table
 };
 
 struct Resolution {

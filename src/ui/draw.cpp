@@ -386,6 +386,8 @@ void Game::drawMenu() const {
                CheckCollisionPointRec(uiMouse, ui::menuPlayRect()));
     drawButton(ui::menuSkinsRect(), "SKINS", true, false,
                CheckCollisionPointRec(uiMouse, ui::menuSkinsRect()));
+    drawButton(ui::menuHighScoresRect(), "HIGH SCORES", true, false,
+               CheckCollisionPointRec(uiMouse, ui::menuHighScoresRect()));
     drawButton(ui::menuSettingsRect(), "SETTINGS", true, false,
                CheckCollisionPointRec(uiMouse, ui::menuSettingsRect()));
     drawButton(ui::menuFullscreenRect(), fs ? "FULLSCREEN: ON" : "FULLSCREEN: OFF", true, fs,
@@ -393,9 +395,9 @@ void Game::drawMenu() const {
     drawButton(ui::menuQuitRect(), "QUIT", true, false,
                CheckCollisionPointRec(uiMouse, ui::menuQuitRect()));
 
-    // Session High Score Card (top-right so it never collides with the buttons)
+    // Permanent best (top-right so it never collides with the buttons)
     if (highScore > 0) {
-        const std::string best = "SESSION BEST: " + std::to_string(highScore);
+        const std::string best = "BEST: " + std::to_string(highScore);
         constexpr int bestSize = 13;
         const float bestW = uiMeasure(best.c_str(), bestSize);
         const Rectangle bCard{static_cast<float>(kWinW) - bestW - 76.0f, 16.0f, bestW + 60.0f,
@@ -581,6 +583,81 @@ void Game::drawSkins() const {
     constexpr int hintSize = 12;
     const int hintW = uiMeasure(hint, hintSize);
     uiText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});
+}
+
+void Game::drawHighScores() const {
+    DrawRectangleGradientV(0, 0, kWinW, kWinH, Color{13, 16, 25, 255}, Color{8, 9, 14, 255});
+    for (const Particle& p : ambientParticles) {
+        DrawCircleV(p.pos, p.size, p.color);
+    }
+    for (int x = kCell; x < kWinW; x += kCell * 2) {
+        DrawLine(x, 0, x, kWinH, Color{22, 26, 36, 150});
+    }
+
+    const char* title = "HIGH SCORES";
+    constexpr int titleSize = 34;
+    const int titleW = uiMeasure(title, titleSize);
+    uiText(title, (kWinW - titleW) / 2 + 2, 26, titleSize, Color{28, 62, 48, 255});
+    uiText(title, (kWinW - titleW) / 2, 24, titleSize, kSnakeHead);
+
+    const Rectangle card{140.0f, 70.0f, 680.0f, 368.0f};
+    DrawRectangleRounded(card, 0.05f, 10, Color{22, 25, 36, 242});
+    DrawRectangleRoundedLinesEx(card, 0.05f, 10, 1.6f, Color{55, 62, 82, 255});
+
+    const Rectangle first = ui::highScoreRowRect(0);
+    const Color headCol{130, 140, 160, 255};
+    const int headY = 90;
+    uiText("RANK", static_cast<int>(first.x + 12), headY, 10, headCol);
+    uiText("NAME", static_cast<int>(first.x + 70), headY, 10, headCol);
+    uiText("SCORE", static_cast<int>(first.x + 290), headY, 10, headCol);
+    uiText("LENGTH", static_cast<int>(first.x + 400), headY, 10, headCol);
+    uiText("TIME", static_cast<int>(first.x + 490), headY, 10, headCol);
+    uiText("DATE", static_cast<int>(first.x + 560), headY, 10, headCol);
+
+    for (int i = 0; i < kMaxHighScores; ++i) {
+        const Rectangle row = ui::highScoreRowRect(i);
+        const bool has = i < board.size();
+        const bool hot = has && (i + 1) == highlightRank;
+        DrawRectangleRounded(row, 0.3f, 6,
+                             hot ? Color{52, 46, 22, 255}
+                                 : ((i % 2 == 0) ? Color{26, 30, 42, 255}
+                                                 : Color{22, 25, 35, 255}));
+        if (hot) {
+            DrawRectangleRoundedLinesEx(row, 0.3f, 6, 1.4f, kGold);
+        }
+        if (!has) {
+            uiText("---", static_cast<int>(row.x + 70), static_cast<int>(row.y + 5), 12,
+                   Color{84, 92, 110, 255});
+            continue;
+        }
+        const ScoreEntry& e = board.at(i);
+        const Color rowCol = hot ? kGold : kText;
+        uiText(TextFormat("#%d", i + 1), static_cast<int>(row.x + 12),
+               static_cast<int>(row.y + 5), 12, hot ? kGold : Color{150, 190, 220, 255});
+        uiText(e.name.c_str(), static_cast<int>(row.x + 70), static_cast<int>(row.y + 5), 12,
+               rowCol);
+        uiText(TextFormat("%d", e.score), static_cast<int>(row.x + 290),
+               static_cast<int>(row.y + 5), 12, rowCol);
+        uiText(TextFormat("%d", e.length), static_cast<int>(row.x + 400),
+               static_cast<int>(row.y + 5), 12, Color{180, 190, 210, 255});
+        uiText(formatScoreTime(e.seconds).c_str(), static_cast<int>(row.x + 490),
+               static_cast<int>(row.y + 5), 12, Color{180, 190, 210, 255});
+        uiText(e.date.c_str(), static_cast<int>(row.x + 560), static_cast<int>(row.y + 5), 12,
+               Color{150, 160, 180, 255});
+    }
+
+    drawButton(ui::highScoresBackRect(), "BACK", true, false,
+               CheckCollisionPointRec(uiMouse, ui::highScoresBackRect()));
+    drawButton(ui::highScoresClearRect(), clearArmed ? "CLEAR?" : "CLEAR", true, clearArmed,
+               CheckCollisionPointRec(uiMouse, ui::highScoresClearRect()));
+
+    const char* hint = clearArmed
+                           ? "Click CLEAR again within 3 s to erase every score"
+                           : "Scores are saved automatically  |  ESC/ENTER back";
+    constexpr int hintSize = 12;
+    const int hintW = uiMeasure(hint, hintSize);
+    uiText(hint, (kWinW - hintW) / 2, 502, hintSize,
+           clearArmed ? Color{240, 150, 120, 255} : Color{130, 140, 160, 255});
 }
 
 } // namespace snake

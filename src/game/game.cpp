@@ -1,6 +1,7 @@
 #include "game/game.hpp"
 #include "game/ai_snake.hpp"
 #include "game/audio.hpp"
+#include "ui/layout.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -98,6 +99,9 @@ const char* effectName(Effect e) {
 
 Game::Game() {
     settings = loadSettings("settings.cfg");
+    board.load("highscores.cfg");
+    highScore = board.best();
+    ui::validateLayout(); // debug builds log any rect that leaves the canvas or overlaps
     initAmbientParticles();
     reset();
     applySettings();
@@ -136,6 +140,14 @@ void Game::reset() {
     shakeTimer = 0.0f;
     shakeIntensity = 0.0f;
     isNewHighRecord = false;
+    enteringName = false;
+    nameBuffer.clear();
+    nameRank = 0;
+    scoreSaved = false;
+    highlightRank = -1;
+    newBestThisRound = false;
+    clearArmed = false;
+    clearArmTimer = 0.0f;
     hasSpecial = false;
     speedFactor = 1.0f;
     effectTimer = 0.0f;
@@ -664,6 +676,13 @@ void Game::togglePause() {
 
 void Game::updateVfx(float dt) {
     animTime += dt;
+    if (clearArmed) {
+        clearArmTimer -= dt;
+        if (clearArmTimer <= 0.0f) {
+            clearArmed = false;
+            clearArmTimer = 0.0f;
+        }
+    }
     updateBlink(dt);
 
     for (Particle& p : ambientParticles) {
@@ -1401,11 +1420,14 @@ void Game::gameOver() {
     boostHeld = false;
     paused = false;
     boostTicks = 0;
-    if (score > highScore) {
-        if (highScore > 0) {
-            isNewHighRecord = true;
-        }
-        highScore = score;
+    // Phase G: the permanent board decides the record banner and the name prompt.
+    // This runs before any insert, so it compares against the previous best.
+    newBestThisRound = !board.empty() && score > board.best();
+    isNewHighRecord = newBestThisRound;
+    if (!scoreSaved && board.qualifies(score)) {
+        enteringName = true;
+        nameBuffer.clear();
+        nameRank = board.rankFor(score);
     }
     triggerShake(0.35f, 4.5f);
     overFade = animations ? 0.0f : 1.0f;
@@ -1423,6 +1445,54 @@ void Game::gameOver() {
             }
         }
     }
+}
+
+// Typed name while the game-over prompt is open. Every key is consumed here: the
+// global hotkeys (M/R/P/C/SPACE/ESC) must not react to a character being typed.
+void Game::handleNameEntry() {
+    int ch = GetCharPressed();
+    while (ch > 0) {
+        const bool allowed = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+                             (ch >= '0' && ch <= '9') || ch == '_' || ch == '-';
+        if (allowed && static_cast<int>(nameBuffer.size()) < kMaxPlayerName) {
+            nameBuffer.push_back(static_cast<char>(ch));
+        }
+        ch = GetCharPressed();
+    }
+    if (IsKeyPressed(KEY_BACKSPACE) && !nameBuffer.empty()) {
+        nameBuffer.pop_back();
+    }
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) {
+        submitRoundScore(nameBuffer);
+        return;
+    }
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        submitRoundScore(""); // empty -> the last remembered name is used
+    }
+}
+
+// The only place a round reaches the table: scoreSaved makes a second insert for
+// the same round impossible (game over, then ESC to the menu, then back again).
+void Game::submitRoundScore(const std::string& name) {
+    enteringName = false;
+    if (scoreSaved || !board.qualifies(score)) {
+        return;
+    }
+    ScoreEntry entry;
+    entry.name = sanitizePlayerName(name.empty() ? settings.playerName : name);
+    entry.score = score;
+    entry.length = static_cast<int>(snake.size());
+    entry.seconds = static_cast<int>(survival);
+    entry.date = todayDate();
+    nameRank = board.insert(entry);
+    scoreSaved = true;
+    settings.playerName = entry.name; // remembered for the next qualifying round
+    persistSettings();
+    if (nameRank > 0) {
+        highlightRank = nameRank;
+        board.save("highscores.cfg");
+    }
+    highScore = board.best();
 }
 
 } // namespace snake

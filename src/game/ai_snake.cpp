@@ -192,6 +192,7 @@ void eatAiSnake(Game& g, size_t index) {
     growPlayer(g, std::max<size_t>(1, length / 2) + 1);
     g.addFloatingText("+" + std::to_string(points), cellToWorld(head, 1.5f), kGood, 1.1f);
     g.spawnParticles(cellToWorld(head, 0.6f), Color{120, 255, 160, 220}, 18, 5.0f, 0.18f, 0.6f);
+    g.flashPulse = std::max(g.flashPulse, 0.35f); // Phase I4g: small screen flash
     audio.play(SfxId::EatAiSnake);
     // AI are eaten immediately (no deferred bite), so the jaw snaps right away.
     g.triggerBite();

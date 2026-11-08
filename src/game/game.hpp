@@ -40,6 +40,15 @@ struct Obstacle {
     float life = 0.0f;
 };
 
+// Flat ring that expands and fades on the floor after a bite (Phase I4a).
+struct Shockwave {
+    Vector3 pos{0.0f, 0.0f, 0.0f};
+    Color color{255, 255, 255, 255};
+    float life = 0.0f;
+    float maxLife = kShockwaveLife;
+    float radius = kShockwaveRadius;
+};
+
 // Fading echo of the head at both ends of a wrap teleport.
 struct GhostHead {
     Cell cell;
@@ -151,6 +160,8 @@ struct Game {
     std::vector<GhostHead> ghosts;
     std::vector<WorldParticle> particles;
     std::vector<Particle> ambientParticles;
+    std::vector<Shockwave> shockwaves; // Phase I4a: bite rings on the floor
+    std::vector<Vector3> dust;         // Phase I4e: ambient motes inside the arena
     std::vector<AiSnake> ai;
     std::vector<AiSpawnWarning> aiWarnings;
     float aiSpawnTimer = 12.0f;
@@ -202,6 +213,7 @@ struct Game {
     Settings settings;
     int settingsTab = TabGraphics; // Phase H: GRAPHICS | GAMEPLAY | AUDIO
     int settingsIndex = 0;
+    int skinPage = 0; // Phase I3: 2 x 4 cards per page, two pages
     Mode settingsReturn = Mode::Menu;
     bool windowSettingsDirty = false;
     float normalTick = kNormalTick;
@@ -275,6 +287,8 @@ struct Game {
     void togglePause();
     void spawnParticles(Vector3 pos, Color color, int count, float speed = 4.0f,
                         float size = 0.14f, float life = 0.5f, bool gravity = true);
+    void spawnEatBurst(const Vector3& pos, Color color); // Phase I1: per-skin bite style
+    void initDust();
     void addFloatingText(const std::string& text, Vector3 pos, Color color, float duration = 1.0f);
     void triggerShake(float duration, float intensity);
     void initAmbientParticles();

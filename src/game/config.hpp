@@ -176,6 +176,14 @@ inline constexpr int kMaxParticles = 1500;   // global cap, multiplied by partic
 inline constexpr float kFlashDecay = 4.0f;   // flash uniform fade-out per second
 inline constexpr float kBoostFovKick = 6.0f; // extra FOV while boosting
 
+// Phase I world effects.
+inline constexpr float kShockwaveLife = 0.45f;   // seconds a bite ring lives
+inline constexpr float kShockwaveRadius = 2.8f;  // largest radius, in cells
+inline constexpr int kDustMin = 20;              // ambient motes at Particles LOW
+inline constexpr int kDustMax = 40;              // ambient motes at Particles HIGH
+inline constexpr float kGridWaveAmp = 0.18f;     // grid line brightness swing
+inline constexpr int kBoostSpeedLines = 14;      // 2D speed lines per edge
+
 // Palette
 inline const Color kBg{14, 14, 20, 255};
 inline const Color kHudBg{26, 28, 38, 255};

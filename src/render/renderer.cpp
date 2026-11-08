@@ -67,7 +67,7 @@ const char* cameraLabel(CameraMode mode) {
 
 // --- 3D scene pieces -------------------------------------------------------
 
-void drawArenaFloor() {
+void drawArenaFloor(const Game& g) {
     // Slab under the floor gives the arena some thickness in perspective.
     // Its top face (centre + height/2) sits at y = -0.02, safely under the floor plane
     // at y = 0: coplanar faces flickered (z-fighting) before.
@@ -77,15 +77,33 @@ void drawArenaFloor() {
     DrawPlane(Vector3{0.0f, 0.0f, 0.0f},
               Vector2{static_cast<float>(kCols), static_cast<float>(kRows)}, kArenaBg);
 
-    const Color grid{34, 38, 52, 255};
+    const Color baseGrid{34, 38, 52, 255};
     const float halfW = static_cast<float>(kCols) * 0.5f;
     const float halfH = static_cast<float>(kRows) * 0.5f;
+
+    // Phase I4d: a subtle brightness wave that follows the head. Colour only,
+    // and completely still when Animations is off.
+    Vector3 head{0.0f, 0.0f, 0.0f};
+    const bool hasHead = !g.snake.empty();
+    if (hasHead) {
+        head = cellToWorld(g.snake.front(), 0.0f);
+    }
+    const auto waveAt = [&](float distance) {
+        if (!hasHead || !g.animations) {
+            return 1.0f;
+        }
+        return 1.0f + kGridWaveAmp *
+                          (0.5f + 0.5f * std::sin(distance * 0.85f - g.animTime * 2.2f));
+    };
+
     for (int x = 0; x <= kCols; ++x) {
         const float wx = static_cast<float>(x) - halfW;
+        const Color grid = render::tint(baseGrid, waveAt(std::fabs(wx - head.x)));
         DrawLine3D(Vector3{wx, kLayerGrid, -halfH}, Vector3{wx, kLayerGrid, halfH}, grid);
     }
     for (int y = 0; y <= kRows; ++y) {
         const float wz = static_cast<float>(y) - halfH;
+        const Color grid = render::tint(baseGrid, waveAt(std::fabs(wz - head.z)));
         DrawLine3D(Vector3{-halfW, kLayerGrid, wz}, Vector3{halfW, kLayerGrid, wz}, grid);
     }
 
@@ -108,6 +126,27 @@ void drawApple(const Game& g, render::TranslucentQueue& q) {
         pop = 1.0f + 0.45f * std::sin(x * 3.141593f) * (1.0f - x);
     }
     const Vector3 c{base.x, 0.55f * pop + bob, base.z};
+
+    // Phase I4b: a pulsing floor glow plus orbiting motes under the apple.
+    if (g.animations) {
+        const float pulse = 0.5f + 0.5f * std::sin(g.animTime * 3.0f);
+        const Color glow{255, 110, 110, static_cast<unsigned char>(26.0f + 26.0f * pulse)};
+        q.add(Vector3{base.x, kLayerWarning, base.z}, [base, pulse, glow] {
+            for (int i = 0; i < 3; ++i) {
+                DrawCircle3D(Vector3{base.x, kLayerWarning, base.z},
+                             0.42f + 0.06f * static_cast<float>(i) + 0.05f * pulse,
+                             Vector3{1.0f, 0.0f, 0.0f}, 90.0f, glow);
+            }
+        });
+        const int motes = (g.settings.particles >= 2) ? 3 : ((g.settings.particles == 1) ? 2 : 0);
+        for (int i = 0; i < motes; ++i) {
+            const float a = g.animTime * 1.8f + static_cast<float>(i) * 2.0943951f;
+            DrawSphereEx(Vector3{c.x + std::cos(a) * 0.52f,
+                                 c.y + 0.1f * std::sin(a * 2.0f),
+                                 c.z + std::sin(a) * 0.52f},
+                         0.05f, kEyeRings, kEyeSlices, kSpecialHalo);
+        }
+    }
 
     // Contact shadow keeps the apple visually grounded (Phase H2: SHADOWS row).
     if (g.settings.shadows != 0) {
@@ -375,17 +414,87 @@ void drawHeadEyes(const HeadPose& p) {
     }
 }
 
-// Gold-royal crown, sitting on top of the (possibly larger) skull.
-void drawHeadCrown(const HeadPose& p, float headRadius) {
+// Phase I1: the head accessory. Crown keeps its gold-royal look; a halo goes
+// through the translucent queue when one is supplied.
+void drawHeadAccessory(const HeadPose& p, float headRadius, render::TranslucentQueue* queue) {
     const float s = headRadius / kHeadRefRadius;
-    const Vector3 base{p.pos.x, p.pos.y + 0.5f * s, p.pos.z};
-    DrawCubeV(base, Vector3{0.36f * s, 0.06f * s, 0.36f * s}, kGold);
-    DrawCubeV(Vector3{base.x - 0.12f * s, base.y + 0.1f * s, base.z},
-              Vector3{0.07f * s, 0.18f * s, 0.07f * s}, kGold);
-    DrawCubeV(Vector3{base.x, base.y + 0.13f * s, base.z},
-              Vector3{0.07f * s, 0.24f * s, 0.07f * s}, kGold);
-    DrawCubeV(Vector3{base.x + 0.12f * s, base.y + 0.1f * s, base.z},
-              Vector3{0.07f * s, 0.18f * s, 0.07f * s}, kGold);
+    const Vector3 top{p.pos.x, p.pos.y + 0.5f * s, p.pos.z};
+    const Vector3 fwd = p.fwd;
+    const Vector3 right{-fwd.z, 0.0f, fwd.x};
+    const Vector3 up{0.0f, 1.0f, 0.0f};
+    const auto sway = [&p](float phase) {
+        return p.animate ? std::sin(p.time * 3.0f + phase) : 0.0f;
+    };
+
+    switch (p.accessory) {
+    case Accessory::Crown:
+        DrawCubeV(top, Vector3{0.36f * s, 0.06f * s, 0.36f * s}, kGold);
+        DrawCubeV(Vector3{top.x - 0.12f * s, top.y + 0.1f * s, top.z},
+                  Vector3{0.07f * s, 0.18f * s, 0.07f * s}, kGold);
+        DrawCubeV(Vector3{top.x, top.y + 0.13f * s, top.z},
+                  Vector3{0.07f * s, 0.24f * s, 0.07f * s}, kGold);
+        DrawCubeV(Vector3{top.x + 0.12f * s, top.y + 0.1f * s, top.z},
+                  Vector3{0.07f * s, 0.18f * s, 0.07f * s}, kGold);
+        break;
+    case Accessory::Halo: {
+        const Vector3 centre =
+            vadd(top, Vector3{0.0f, 0.14f * s + 0.015f * sway(0.0f), 0.0f});
+        const auto ring = [centre, s] {
+            for (int i = 0; i < 3; ++i) {
+                DrawCircle3D(centre, (0.21f + 0.012f * static_cast<float>(i)) * s,
+                             Vector3{1.0f, 0.0f, 0.0f}, 90.0f, Color{255, 238, 155, 190});
+            }
+        };
+        if (queue != nullptr) {
+            queue->add(centre, ring);
+        } else {
+            ring();
+        }
+        break;
+    }
+    case Accessory::Horns: {
+        const Color horn{236, 232, 220, 255};
+        for (int side = -1; side <= 1; side += 2) {
+            const Vector3 base = vadd(vadd(top, vmul(right, 0.18f * s * static_cast<float>(side))),
+                                      Vector3{0.0f, -0.02f * s, 0.0f});
+            const Vector3 tip =
+                vadd(base, vadd(vmul(up, 0.3f * s), vmul(fwd, 0.02f * s)));
+            DrawCylinderEx(base, tip, 0.07f * s, 0.0f, 6, horn);
+        }
+        break;
+    }
+    case Accessory::CatEars: {
+        const Color ear = render::tint(p.head, 0.9f);
+        for (int side = -1; side <= 1; side += 2) {
+            const Vector3 base = vadd(vadd(top, vmul(right, 0.2f * s * static_cast<float>(side))),
+                                      Vector3{0.0f, -0.04f * s, 0.0f});
+            const Vector3 tip = vadd(base, vadd(vmul(up, 0.22f * s),
+                                              vmul(right, 0.05f * s * static_cast<float>(side))));
+            DrawCylinderEx(base, tip, 0.1f * s, 0.0f, 6, ear);
+        }
+        break;
+    }
+    case Accessory::Antenna: {
+        const Vector3 tip = vadd(top, vadd(vmul(up, 0.34f * s), vmul(right, 0.07f * s * sway(0.0f))));
+        DrawCylinderEx(top, tip, 0.02f * s, 0.014f * s, 5, Color{92, 200, 122, 255});
+        DrawSphereEx(tip, 0.055f * s, kEyeRings, kEyeSlices, Color{145, 255, 172, 255});
+        break;
+    }
+    case Accessory::Flower: {
+        const Vector3 centre = vadd(top, Vector3{0.0f, 0.05f * s, 0.0f});
+        for (int i = 0; i < 5; ++i) {
+            const float a = p.time * 0.8f + static_cast<float>(i) * 1.2566371f;
+            const Vector3 petal =
+                vadd(centre, vadd(vmul(right, std::cos(a) * 0.09f * s), vmul(fwd, std::sin(a) * 0.09f * s)));
+            DrawSphereEx(petal, 0.07f * s, kEyeRings, kEyeSlices, Color{255, 172, 202, 255});
+        }
+        DrawSphereEx(centre, 0.05f * s, kEyeRings, kEyeSlices, Color{255, 232, 145, 255});
+        break;
+    }
+    case Accessory::None:
+    default:
+        break;
+    }
 }
 
 // Soft pink cheeks, flattened along the vertical axis.
@@ -436,7 +545,7 @@ void drawHeadSmile(const HeadPose& p) {
     }
 }
 
-void drawSnakeHeadBody(const HeadPose& p) {
+void drawSnakeHeadBody(const HeadPose& p, render::TranslucentQueue* queue) {
     const float radius = kHeadRadius * p.scale;
     // Bite pulse: the skull throbs briefly as the jaw snaps shut.
     float pulse = 1.0f;
@@ -454,8 +563,8 @@ void drawSnakeHeadBody(const HeadPose& p) {
     drawHeadSmile(p);
     drawHeadEyes(p);
     drawHeadTongue(p);
-    if (p.crown) {
-        drawHeadCrown(p, headRadius);
+    if (p.accessory != Accessory::None) {
+        drawHeadAccessory(p, headRadius, queue);
     }
 }
 
@@ -542,7 +651,7 @@ struct BodyRig {
 };
 
 // Solid pass: connectors, body spheres and the head.
-void drawSnakeBody(const Game& g) {
+void drawSnakeBody(const Game& g, render::TranslucentQueue& q) {
     const BodyRig rig(g);
     const size_t n = rig.n;
     if (n == 0) {
@@ -565,7 +674,14 @@ void drawSnakeBody(const Game& g) {
         if (sk.shape == SegmentShape::Cube && (i % 2) == 0) {
             link = render::tint(link, kHeadCubeTint);
         }
-        DrawCylinderEx(a, b, linkRadius, linkRadius, kLinkSides, link);
+        if (sk.translucent) {
+            const Color see = render::withAlpha(link, 205);
+            q.add(a, [a, b, linkRadius, see] {
+                DrawCylinderEx(a, b, linkRadius, linkRadius, kLinkSides, see);
+            });
+        } else {
+            DrawCylinderEx(a, b, linkRadius, linkRadius, kLinkSides, link);
+        }
     }
 
     for (size_t i = n; i-- > 0;) {
@@ -588,36 +704,77 @@ void drawSnakeBody(const Game& g) {
             pose.animate = anim;
             pose.head = g.headColor();
             pose.eye = g.eyeColor();
-            pose.crown = sk.crown;
+            pose.accessory = sk.accessory;
             const Vector2 gaze = g.headGaze();
             pose.gazeRight = gaze.x;
             pose.gazeFwd = gaze.y;
             pose.blink = g.blinkProgress();
             pose.happy = g.eyesHappy();
-            drawSnakeHeadBody(pose);
+            drawSnakeHeadBody(pose, &q);
         } else {
             // Every skin is round now; Cube skins keep their identity with an
-            // alternating band instead of a hard-edged box.
-            Color seg = col;
-            if (sk.shape == SegmentShape::Cube && (i % 2) == 1) {
-                seg = render::tint(col, kHeadCubeTint);
+            // alternating band instead of a hard-edged box, and the skin pattern
+            // has already tinted this segment through snakeColorAt().
+            const Color seg = col;
+            if (sk.translucent) {
+                const Color see = render::withAlpha(seg, 205);
+                q.add(p, [p, r, bump, see] {
+                    DrawSphereEx(p, r * bump, kBodyRings, kBodySlices, see);
+                });
+            } else {
+                DrawSphereEx(p, r * bump, kBodyRings, kBodySlices, seg);
             }
-            DrawSphereEx(p, r * bump, kBodyRings, kBodySlices, seg);
         }
     }
 }
 
-// Translucent pass: the soft glow shells of the Neon/accent skins.
+// Translucent pass: the soft aura of skins with glowAmount > 0 (Phase I1).
 void drawSnakeGlow(const Game& g, render::TranslucentQueue& q) {
-    if (g.skin().trail != TrailKind::Glow) {
+    const SkinDef& sk = g.skin();
+    if (sk.glowAmount <= 0.0f) {
         return;
     }
     const BodyRig rig(g);
-    const Color glow = render::withAlpha(g.skin().accent, 36);
+    const auto alpha = static_cast<unsigned char>(
+        std::clamp(14.0f + 34.0f * sk.glowAmount, 0.0f, 80.0f));
+    const Color glow = render::withAlpha(sk.accent, alpha);
     for (size_t i = 0; i < rig.n; ++i) {
         const Vector3 p = rig.bodyPoint(i);
-        const float radius = rig.radiusAt(i) * 1.45f * rig.swallowBump(i);
+        const float radius =
+            rig.radiusAt(i) * (1.35f + 0.15f * sk.glowAmount) * rig.swallowBump(i);
         q.add(p, [p, radius, glow] { DrawSphereEx(p, radius, kEyeRings, kEyeSlices, glow); });
+    }
+}
+
+// Phase I4a: flat bite rings expanding on the floor.
+void drawShockwaves(const Game& g, render::TranslucentQueue& q) {
+    for (const Shockwave& w : g.shockwaves) {
+        if (w.maxLife <= 0.0f) {
+            continue;
+        }
+        const float t = std::clamp(w.life / w.maxLife, 0.0f, 1.0f);
+        const float radius = w.radius * (1.0f - t);
+        if (radius <= 0.02f) {
+            continue;
+        }
+        const Color col = render::withAlpha(w.color, static_cast<unsigned char>(200.0f * t));
+        const Vector3 centre{w.pos.x, kLayerWarning, w.pos.z};
+        q.add(centre, [centre, radius, col] {
+            for (int i = 0; i < 3; ++i) {
+                DrawCircle3D(centre, radius - 0.02f * static_cast<float>(i),
+                             Vector3{1.0f, 0.0f, 0.0f}, 90.0f, col);
+            }
+        });
+    }
+}
+
+// Phase I4e: slow ambient motes above the arena.
+void drawDust(const Game& g, render::TranslucentQueue& q) {
+    const int wanted = kDustMin * std::clamp(g.settings.particles, 0, 2);
+    const int count = std::min(wanted, static_cast<int>(g.dust.size()));
+    for (int i = 0; i < count; ++i) {
+        const Vector3 p = g.dust[static_cast<size_t>(i)];
+        q.add(p, [p] { DrawCubeV(p, Vector3{0.05f, 0.05f, 0.05f}, Color{150, 170, 210, 60}); });
     }
 }
 
@@ -743,7 +900,9 @@ void applyUiScale(float scale) {
 }
 
 // Public entry point: the gameplay snake and the skins preview both call this.
-void drawSnakeHead(const HeadPose& pose) { drawSnakeHeadBody(pose); }
+void drawSnakeHead(const HeadPose& pose, render::TranslucentQueue* queue) {
+    drawSnakeHeadBody(pose, queue);
+}
 
 void Game::drawGhostHead(const GhostHead& g) const {
     const float fade = (g.maxLife > 0.0f) ? (g.life / g.maxLife) : 0.0f;
@@ -835,7 +994,7 @@ void Game::draw() const {
     // Pass 2: the queue, far -> near, with depth writes off.
     render::TranslucentQueue translucent;
     BeginMode3D(cam);
-    drawArenaFloor();
+    drawArenaFloor(*this);
     drawWarnings(*this, translucent);
     drawAiWarnings(*this, translucent);
     drawObstacles(*this, translucent);
@@ -849,13 +1008,31 @@ void Game::draw() const {
     // With animation on, the body is gone on game over: it burst into shards.
     if (!(over && animations)) {
         drawSnakeShadow(*this, translucent);
-        drawSnakeBody(*this);
+        drawSnakeBody(*this, translucent);
         drawSnakeGlow(*this, translucent);
     }
+    drawShockwaves(*this, translucent);
+    drawDust(*this, translucent);
     drawParticles3D(*this, translucent);
     translucent.flush(cam.position);
     EndMode3D();
     applyUiScale(uiScale); // EndMode3D reset the modelview matrix
+
+    // Phase I4c: thin speed lines along the arena edges while boosting.
+    if (animations && !paused && !over && boostVisual > 0.02f) {
+        const unsigned char a = static_cast<unsigned char>(95.0f * boostVisual);
+        const Color line{175, 240, 255, a};
+        const float len = 20.0f + 50.0f * boostVisual;
+        const float x0 = static_cast<float>(kArenaX) + 7.0f;
+        const float x1 = static_cast<float>(kArenaX + kArenaW) - 7.0f;
+        for (int i = 0; i < kBoostSpeedLines; ++i) {
+            const float t = (static_cast<float>(i) + 0.5f) / static_cast<float>(kBoostSpeedLines);
+            const float y = static_cast<float>(kArenaY) + 18.0f +
+                            t * (static_cast<float>(kArenaH) - 36.0f);
+            DrawLineEx(Vector2{x0, y}, Vector2{x0 + len, y}, 1.2f, line);
+            DrawLineEx(Vector2{x1, y}, Vector2{x1 - len, y}, 1.2f, line);
+        }
+    }
 
     // Floating score popups projected from world space.
     for (const FloatingText& ft : floatingTexts) {

@@ -1,6 +1,7 @@
 #include "game/game.hpp"
 #include "game/ai_snake.hpp"
 #include "game/audio.hpp"
+#include "render/color.hpp"
 #include "ui/layout.hpp"
 
 #include <algorithm>
@@ -105,6 +106,7 @@ Game::Game() {
     initAmbientParticles();
     reset();
     applySettings();
+    initDust();
     camera.up = Vector3{0.0f, 1.0f, 0.0f};
     camera.fovy = 45.0f;
     camera.projection = CAMERA_PERSPECTIVE;
@@ -133,6 +135,7 @@ void Game::reset() {
     warnings.clear();
     ghosts.clear();
     particles.clear();
+    shockwaves.clear();
     floatingTexts.clear();
     resetAi(*this);
     hoverId = -1;
@@ -744,6 +747,24 @@ void Game::updateVfx(float dt) {
         }
     }
 
+    for (size_t i = 0; i < shockwaves.size();) {
+        shockwaves[i].life -= dt;
+        if (shockwaves[i].life <= 0.0f) {
+            shockwaves.erase(shockwaves.begin() + static_cast<std::ptrdiff_t>(i));
+        } else {
+            ++i;
+        }
+    }
+
+    // Ambient dust drifts slowly upward and wraps back to the floor.
+    for (Vector3& p : dust) {
+        p.y += 0.05f * dt;
+        p.x += std::sin(animTime * 0.35f + p.z) * 0.04f * dt;
+        if (p.y > 2.6f) {
+            p.y = 0.15f;
+        }
+    }
+
     for (size_t i = 0; i < floatingTexts.size();) {
         floatingTexts[i].pos.y += 0.9f * dt;
         floatingTexts[i].life -= dt;
@@ -801,6 +822,32 @@ void Game::stepFrame(float dt) {
             spawnParticles(tailPos,
                            Color{trailSkin.accent.r, trailSkin.accent.g, trailSkin.accent.b, 150},
                            1, 0.6f, 0.09f, 0.35f, false);
+            break;
+        case TrailKind::Bubbles:
+            spawnParticles(tailPos,
+                           Color{trailSkin.accent.r, trailSkin.accent.g, trailSkin.accent.b, 170},
+                           1, 0.7f, 0.1f, 0.8f, false);
+            break;
+        case TrailKind::Petals:
+            spawnParticles(tailPos, Color{255, 175, 200, 200}, 1, 0.8f, 0.11f, 0.9f, false);
+            break;
+        case TrailKind::Stars:
+            spawnParticles(tailPos, Color{255, 245, 160, 220}, 1, 1.0f, 0.08f, 0.5f, false);
+            break;
+        case TrailKind::Smoke:
+            spawnParticles(tailPos, Color{150, 155, 170, 120}, 1, 0.5f, 0.16f, 0.9f, false);
+            break;
+        case TrailKind::Pixels:
+            spawnParticles(tailPos, Color{255, 60, 220, 220}, 1, 1.6f, 0.07f, 0.25f, false);
+            break;
+        case TrailKind::Lightning:
+            spawnParticles(tailPos, Color{255, 250, 190, 230}, 2, 2.6f, 0.06f, 0.18f, false);
+            break;
+        case TrailKind::Snow:
+            spawnParticles(tailPos, Color{235, 245, 255, 200}, 1, 0.6f, 0.08f, 1.1f);
+            break;
+        case TrailKind::Hearts:
+            spawnParticles(tailPos, Color{255, 130, 170, 210}, 1, 0.9f, 0.1f, 0.8f, false);
             break;
         case TrailKind::None:
             break;
@@ -1053,14 +1100,13 @@ void Game::resolvePendingBites() {
     for (const PendingBite& bite : pendingBites) {
         if (bite.special) {
             flashPulse = std::max(flashPulse, 0.7f); // big event: brief screen flash
-            spawnParticles(bite.pos, kSpecial, 22, 5.5f, 0.18f, 0.6f);
-            spawnParticles(bite.pos, kSpecialHalo, 12, 4.0f, 0.13f, 0.5f);
-            spawnParticles(bite.pos, bite.good ? kGood : kBad, 10, 4.8f, 0.14f, 0.55f);
+            spawnEatBurst(bite.pos, kSpecial);       // Phase I1 skin-specific style
+            spawnParticles(bite.pos, kSpecialHalo, 10, 4.0f, 0.13f, 0.5f);
+            spawnParticles(bite.pos, bite.good ? kGood : kBad, 8, 4.8f, 0.14f, 0.55f);
             triggerShake(0.18f, 2.8f);
             audio.play(bite.good ? SfxId::SpecialGood : SfxId::SpecialBad);
         } else {
-            spawnParticles(bite.pos, kFood, 14, 4.5f, 0.16f, 0.45f);
-            spawnParticles(bite.pos, Color{255, 230, 160, 255}, 6, 3.0f, 0.11f, 0.35f);
+            spawnEatBurst(bite.pos, kFood);
             audio.play(SfxId::EatFood);
         }
         addFloatingText(bite.label,
@@ -1323,8 +1369,45 @@ Color Game::snakeColorAt(size_t index, size_t count) const {
         return static_cast<unsigned char>(static_cast<float>(a) +
                                           (static_cast<float>(b) - static_cast<float>(a)) * k);
     };
-    return Color{mix(s.head.r, s.tail.r, t), mix(s.head.g, s.tail.g, t),
-                 mix(s.head.b, s.tail.b, t), 255};
+    Color base{mix(s.head.r, s.tail.r, t), mix(s.head.g, s.tail.g, t),
+               mix(s.head.b, s.tail.b, t), 255};
+
+    // Phase I1: body patterns only change the per-segment tint, never the geometry.
+    const float phase = static_cast<float>(index);
+    switch (s.pattern) {
+    case BodyPattern::Solid:
+        break;
+    case BodyPattern::Stripes:
+        if (index % 2 == 1) {
+            base = render::tint(base, 0.78f);
+        }
+        break;
+    case BodyPattern::Spots: {
+        const float n = std::sin(phase * 1.7f) * std::sin(phase * 0.63f);
+        if (n > 0.35f) {
+            base = render::tint(base, 0.8f);
+        }
+        break;
+    }
+    case BodyPattern::Checker:
+        if ((index / 2) % 2 == 1) {
+            base = render::tint(base, 0.72f);
+        }
+        break;
+    case BodyPattern::Pulse: {
+        const float wave = 0.5f + 0.5f * std::sin(animTime * 3.2f - phase * 0.6f);
+        base = render::tint(base, 0.74f + 0.38f * wave);
+        break;
+    }
+    case BodyPattern::Scales:
+        if (index % 3 == 1) {
+            base = render::tint(base, 0.86f);
+        } else if (index % 3 == 2) {
+            base = render::tint(base, 1.1f);
+        }
+        break;
+    }
+    return base;
 }
 
 void Game::applySettings() {
@@ -1460,6 +1543,59 @@ void Game::gameOver() {
                 spawnParticles(cellToWorld(c, 0.5f), headColor(), 3, 3.2f, 0.15f, 0.6f);
             }
         }
+    }
+}
+
+// Phase I1: the bite style of the equipped skin, plus the Phase I4a floor ring.
+void Game::spawnEatBurst(const Vector3& pos, Color color) {
+    const SkinDef& sk = skin();
+    switch (sk.burst) {
+    case EatBurst::Default:
+        spawnParticles(pos, color, 14, 4.5f, 0.16f, 0.45f);
+        break;
+    case EatBurst::Hearts:
+        spawnParticles(pos, Color{255, 140, 180, 220}, 16, 3.4f, 0.16f, 0.7f);
+        spawnParticles(pos, Color{255, 210, 230, 220}, 8, 2.6f, 0.12f, 0.6f);
+        break;
+    case EatBurst::Stars:
+        spawnParticles(pos, Color{255, 240, 150, 230}, 18, 4.0f, 0.14f, 0.6f);
+        spawnParticles(pos, Color{200, 230, 255, 220}, 8, 3.0f, 0.1f, 0.5f);
+        break;
+    case EatBurst::Confetti: {
+        const Color palette[5] = {{255, 90, 120, 230}, {90, 220, 160, 230}, {120, 170, 255, 230},
+                                  {255, 220, 120, 230}, {220, 140, 255, 230}};
+        for (int i = 0; i < 5; ++i) {
+            spawnParticles(pos, palette[i], 5, 5.0f, 0.12f, 0.7f);
+        }
+        break;
+    }
+    case EatBurst::Sparks:
+        spawnParticles(pos, Color{255, 245, 170, 240}, 20, 6.0f, 0.1f, 0.35f);
+        break;
+    case EatBurst::Ripples:
+        spawnParticles(pos, Color{170, 225, 255, 200}, 10, 2.4f, 0.12f, 0.5f, false);
+        break;
+    }
+
+    Shockwave ring;
+    ring.pos = Vector3{pos.x, 0.0f, pos.z};
+    ring.color = (sk.burst == EatBurst::Ripples) ? sk.accent : color;
+    ring.life = kShockwaveLife;
+    ring.maxLife = kShockwaveLife;
+    ring.radius = kShockwaveRadius;
+    shockwaves.push_back(ring);
+}
+
+// Phase I4e: a fixed pool of ambient motes; the renderer draws 20/N/40 of them.
+void Game::initDust() {
+    dust.clear();
+    std::uniform_real_distribution<float> dx(-static_cast<float>(kCols) * 0.5f,
+                                             static_cast<float>(kCols) * 0.5f);
+    std::uniform_real_distribution<float> dz(-static_cast<float>(kRows) * 0.5f,
+                                             static_cast<float>(kRows) * 0.5f);
+    std::uniform_real_distribution<float> dy(0.15f, 2.4f);
+    for (int i = 0; i < kDustMax; ++i) {
+        dust.push_back(Vector3{dx(rng), dy(rng), dz(rng)});
     }
 }
 

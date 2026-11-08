@@ -64,6 +64,83 @@ const char* settingName(int row) {
     }
 }
 
+const char* trailName(TrailKind t) {
+    switch (t) {
+    case TrailKind::Embers:
+        return "EMBERS";
+    case TrailKind::Sparkle:
+        return "SPARKLE";
+    case TrailKind::Glow:
+        return "GLOW";
+    case TrailKind::Bubbles:
+        return "BUBBLES";
+    case TrailKind::Petals:
+        return "PETALS";
+    case TrailKind::Stars:
+        return "STARS";
+    case TrailKind::Smoke:
+        return "SMOKE";
+    case TrailKind::Pixels:
+        return "PIXELS";
+    case TrailKind::Lightning:
+        return "LIGHTNING";
+    case TrailKind::Snow:
+        return "SNOW";
+    case TrailKind::Hearts:
+        return "HEARTS";
+    case TrailKind::None:
+    default:
+        return "NONE";
+    }
+}
+
+Color trailPreviewColor(const SkinDef& sk) {
+    switch (sk.trail) {
+    case TrailKind::Embers:
+        return Color{255, 140, 50, 200};
+    case TrailKind::Sparkle:
+        return Color{200, 235, 255, 200};
+    case TrailKind::Glow:
+    case TrailKind::Bubbles:
+        return render::withAlpha(sk.accent, 180);
+    case TrailKind::Petals:
+        return Color{255, 175, 200, 200};
+    case TrailKind::Stars:
+        return Color{255, 245, 160, 220};
+    case TrailKind::Smoke:
+        return Color{150, 155, 170, 140};
+    case TrailKind::Pixels:
+        return Color{255, 60, 220, 210};
+    case TrailKind::Lightning:
+        return Color{255, 250, 190, 230};
+    case TrailKind::Snow:
+        return Color{235, 245, 255, 200};
+    case TrailKind::Hearts:
+        return Color{255, 130, 170, 210};
+    case TrailKind::None:
+    default:
+        return Color{0, 0, 0, 0};
+    }
+}
+
+const char* burstName(EatBurst b) {
+    switch (b) {
+    case EatBurst::Hearts:
+        return "HEARTS";
+    case EatBurst::Stars:
+        return "STARS";
+    case EatBurst::Confetti:
+        return "CONFETTI";
+    case EatBurst::Sparks:
+        return "SPARKS";
+    case EatBurst::Ripples:
+        return "RIPPLES";
+    case EatBurst::Default:
+    default:
+        return "DEFAULT";
+    }
+}
+
 } // namespace
 
 void Game::drawButton(const Rectangle& r, const char* label, bool enabled, bool active,
@@ -527,8 +604,8 @@ void Game::drawSkins() const {
 
     // 3D turntable: the selected skin slithers in a ring so every angle is visible.
     Camera3D cam{};
-    cam.position = Vector3{0.0f, 7.0f, 10.5f};
-    cam.target = Vector3{0.0f, 1.2f, 0.0f};
+    cam.position = Vector3{0.0f, 6.2f, 9.0f};
+    cam.target = Vector3{0.0f, 1.1f, 0.0f};
     cam.up = Vector3{0.0f, 1.0f, 0.0f};
     cam.fovy = 34.0f;
     cam.projection = CAMERA_PERSPECTIVE;
@@ -546,8 +623,11 @@ void Game::drawSkins() const {
                         std::sin(a) * 1.9f};
         const Color col = snakeColorAt(i, previewCount);
 
-        if (sk.trail == TrailKind::Glow) {
-            const Color glow = render::withAlpha(sk.accent, 34);
+        // Phase I1: the aura previews exactly what gameplay draws.
+        if (sk.glowAmount > 0.0f) {
+            const Color glow = render::withAlpha(
+                sk.accent, static_cast<unsigned char>(std::clamp(16.0f + 30.0f * sk.glowAmount,
+                                                                 0.0f, 80.0f)));
             translucent.add(p, [p, glow] { DrawSphereEx(p, 0.58f, kEyeRings, kEyeSlices, glow); });
         }
 
@@ -560,18 +640,23 @@ void Game::drawSkins() const {
             pose.animate = animations;
             pose.head = headColor();
             pose.eye = eyeColor();
-            pose.crown = sk.crown;
+            pose.accessory = sk.accessory;
             pose.blink = blinkProgress();
-            drawSnakeHead(pose);
+            drawSnakeHead(pose, &translucent);
         } else {
-            // Same chibi taper as gameplay: round segments, banded for Cube skins.
+            // Same chibi taper as gameplay, with the skin pattern already applied
+            // by snakeColorAt(). Translucent skins preview through the queue.
             const float t = static_cast<float>(i) / static_cast<float>(previewCount - 2);
             const float r = kHeadTailRadius + (kHeadBodyNear - kHeadTailRadius) * t;
-            Color seg = col;
-            if (sk.shape == SegmentShape::Cube && (i % 2) == 1) {
-                seg = render::tint(col, kHeadCubeTint);
+            const Color seg = col;
+            if (sk.translucent) {
+                const Color see = render::withAlpha(seg, 205);
+                translucent.add(p, [p, r, see] {
+                    DrawSphereEx(p, r, kBodyRings, kBodySlices, see);
+                });
+            } else {
+                DrawSphereEx(p, r, kBodyRings, kBodySlices, seg);
             }
-            DrawSphereEx(p, r, kBodyRings, kBodySlices, seg);
         }
     }
     translucent.flush(cam.position);
@@ -584,11 +669,33 @@ void Game::drawSkins() const {
     uiText(title, (kWinW - titleW) / 2 + 2, 26, titleSize, Color{28, 62, 48, 255});
     uiText(title, (kWinW - titleW) / 2, 24, titleSize, kSnakeHead);
 
-    const int nameW = uiMeasure(sk.name, 20);
-    uiText(sk.name, (kWinW - nameW) / 2, 318, 20, kGold);
+    const int nameW = uiMeasure(sk.name, 19);
+    uiText(sk.name, (kWinW - nameW) / 2, 240, 19, kGold);
 
-    for (int i = 0; i < kSkinCount; ++i) {
-        const Rectangle skinCard = ui::skinCardRect(i);
+    // Trail and bite style of the selected skin, so the preview is readable.
+    const std::string fxLine =
+        std::string("TRAIL: ") + trailName(sk.trail) + "   BITE: " + burstName(sk.burst);
+    const int fxLineW = uiMeasure(fxLine.c_str(), 10);
+    uiText(fxLine.c_str(), (kWinW - fxLineW) / 2, 258, 10, Color{150, 190, 210, 255});
+
+    // Small looping trail demo above the cards, so the effect is visible too.
+    if (animations && sk.trail != TrailKind::None) {
+        const Color dotCol = trailPreviewColor(sk);
+        for (int i = 0; i < 8; ++i) {
+            const float phase = std::fmod(animTime * 0.45f + static_cast<float>(i) * 0.13f, 1.0f);
+            const float x = 390.0f + phase * 180.0f;
+            const float y = 232.0f - phase * 28.0f;
+            DrawCircleV(Vector2{x, y}, 2.6f * (1.0f - 0.5f * phase), dotCol);
+        }
+    }
+
+    const int page = std::clamp(skinPage, 0, ui::kSkinPageCount - 1);
+    for (int slot = 0; slot < ui::kSkinPerPage; ++slot) {
+        const int i = page * ui::kSkinPerPage + slot;
+        if (i >= kSkinCount) {
+            break;
+        }
+        const Rectangle skinCard = ui::skinCardRect(slot);
         const bool selected = (i == settings.skin);
         const bool hovered = CheckCollisionPointRec(uiMouse, skinCard);
         Color fill{24, 28, 38, 245};
@@ -614,10 +721,20 @@ void Game::drawSkins() const {
         DrawCircleV(Vector2{swatchX + 36.0f, swatchY}, 7.0f, kSkins[i].tail);
     }
 
+    drawButton(ui::skinsPrevRect(), "<", true, false,
+               CheckCollisionPointRec(uiMouse, ui::skinsPrevRect()));
+    drawButton(ui::skinsNextRect(), ">", true, false,
+               CheckCollisionPointRec(uiMouse, ui::skinsNextRect()));
     drawButton(ui::skinsBackRect(), "BACK", true, false,
                CheckCollisionPointRec(uiMouse, ui::skinsBackRect()));
 
-    const char* hint = "LEFT/RIGHT or click a card to equip  |  ENTER/ESC back";
+    const std::string pageText =
+        std::to_string(page + 1) + "/" + std::to_string(ui::kSkinPageCount);
+    const int pageW = uiMeasure(pageText.c_str(), 12);
+    uiText(pageText.c_str(), 332.0f - pageW * 0.5f, 458, 12, Color{170, 200, 220, 255});
+
+    const char* hint =
+        "Arrows / click a card to equip  |  PAGE UP/DOWN flips pages  |  ESC back";
     constexpr int hintSize = 12;
     const int hintW = uiMeasure(hint, hintSize);
     uiText(hint, (kWinW - hintW) / 2, 502, hintSize, Color{130, 140, 160, 255});

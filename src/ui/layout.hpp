@@ -85,11 +85,21 @@ inline Rectangle settingsRowRect(int index) {
 }
 inline Rectangle settingsBackRect() { return Rectangle{380.0f, 452.0f, 200.0f, 40.0f}; }
 
-// Skins screen: six cards in a row plus a back button.
-inline Rectangle skinCardRect(int index) {
-    return Rectangle{66.0f + static_cast<float>(index) * 140.0f, 348.0f, 128.0f, 74.0f};
+// Skins screen (Phase I3): 4 x 2 cards per page, two pages, with page arrows.
+inline constexpr int kSkinGridCols = 4;
+inline constexpr int kSkinGridRows = 2;
+inline constexpr int kSkinPerPage = kSkinGridCols * kSkinGridRows;
+inline constexpr int kSkinPageCount = (kSkinCount + kSkinPerPage - 1) / kSkinPerPage;
+
+inline Rectangle skinCardRect(int slot) {
+    const int col = slot % kSkinGridCols;
+    const int row = slot / kSkinGridCols;
+    return Rectangle{166.0f + static_cast<float>(col) * 160.0f,
+                     272.0f + static_cast<float>(row) * 84.0f, 148.0f, 76.0f};
 }
-inline Rectangle skinsBackRect() { return Rectangle{400.0f, 442.0f, 160.0f, 38.0f}; }
+inline Rectangle skinsPrevRect() { return Rectangle{270.0f, 450.0f, 34.0f, 30.0f}; }
+inline Rectangle skinsNextRect() { return Rectangle{360.0f, 450.0f, 34.0f, 30.0f}; }
+inline Rectangle skinsBackRect() { return Rectangle{470.0f, 450.0f, 140.0f, 32.0f}; }
 
 // High Scores screen: ten table rows, BACK and the two-step CLEAR.
 inline Rectangle highScoreRowRect(int index) {
@@ -126,12 +136,14 @@ inline void validateLayout() {
     settingsRects[kMaxSettingsRowsPerTab] = settingsBackRect();
     checkScreenRects("settings", settingsRects, kMaxSettingsRowsPerTab + 1);
 
-    Rectangle skinRects[kSkinCount + 1];
-    for (int i = 0; i < kSkinCount; ++i) {
+    Rectangle skinRects[kSkinPerPage + 3];
+    for (int i = 0; i < kSkinPerPage; ++i) {
         skinRects[i] = skinCardRect(i);
     }
-    skinRects[kSkinCount] = skinsBackRect();
-    checkScreenRects("skins", skinRects, kSkinCount + 1);
+    skinRects[kSkinPerPage] = skinsPrevRect();
+    skinRects[kSkinPerPage + 1] = skinsNextRect();
+    skinRects[kSkinPerPage + 2] = skinsBackRect();
+    checkScreenRects("skins", skinRects, kSkinPerPage + 3);
 
     Rectangle highScoreRects[kMaxHighScores + 2];
     for (int i = 0; i < kMaxHighScores; ++i) {

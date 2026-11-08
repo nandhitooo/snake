@@ -41,9 +41,11 @@ int hoverTarget(const Game& g, const Vector2& m) {
         if (CheckCollisionPointRec(m, ui::settingsBackRect())) return 2100;
         return -1;
     case Mode::Skins:
-        for (int i = 0; i < kSkinCount; ++i) {
-            if (CheckCollisionPointRec(m, ui::skinCardRect(i))) return 3000 + i;
+        for (int slot = 0; slot < ui::kSkinPerPage; ++slot) {
+            if (CheckCollisionPointRec(m, ui::skinCardRect(slot))) return 3000 + slot;
         }
+        if (CheckCollisionPointRec(m, ui::skinsPrevRect())) return 3101;
+        if (CheckCollisionPointRec(m, ui::skinsNextRect())) return 3102;
         if (CheckCollisionPointRec(m, ui::skinsBackRect())) return 3100;
         return -1;
     case Mode::Playing:
@@ -165,16 +167,32 @@ void Game::handleInput() {
         return;
     }
     if (mode == Mode::Skins) {
-        int delta = 0;
-        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_UP)) {
-            delta = -1;
+        // Grid-aware arrows: left/right step one card, up/down one row.
+        int step = 0;
+        if (IsKeyPressed(KEY_LEFT)) {
+            step = -1;
         }
-        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_DOWN)) {
-            delta = 1;
+        if (IsKeyPressed(KEY_RIGHT)) {
+            step = 1;
         }
-        if (delta != 0) {
+        if (IsKeyPressed(KEY_UP)) {
+            step = -ui::kSkinGridCols;
+        }
+        if (IsKeyPressed(KEY_DOWN)) {
+            step = ui::kSkinGridCols;
+        }
+        if (step != 0) {
             audio.play(SfxId::MenuClick);
-            settings.skin = std::clamp(settings.skin + delta, 0, kSkinCount - 1);
+            settings.skin = std::clamp(settings.skin + step, 0, kSkinCount - 1);
+            skinPage = settings.skin / ui::kSkinPerPage;
+            persistSettings();
+        }
+        if (IsKeyPressed(KEY_PAGE_UP) || IsKeyPressed(KEY_PAGE_DOWN)) {
+            const int dir = IsKeyPressed(KEY_PAGE_UP) ? -1 : 1;
+            skinPage = (skinPage + dir + ui::kSkinPageCount) % ui::kSkinPageCount;
+            const int slot = settings.skin % ui::kSkinPerPage;
+            settings.skin = std::min(skinPage * ui::kSkinPerPage + slot, kSkinCount - 1);
+            audio.play(SfxId::MenuClick);
             persistSettings();
         }
         if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) || IsKeyPressed(KEY_SPACE)) {
@@ -333,10 +351,24 @@ void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
                 transitionT = animations ? 1.0f : 0.0f;
                 return;
             }
-            for (int i = 0; i < kSkinCount; ++i) {
-                if (CheckCollisionPointRec(mouse, ui::skinCardRect(i))) {
+            if (CheckCollisionPointRec(mouse, ui::skinsPrevRect()) ||
+                CheckCollisionPointRec(mouse, ui::skinsNextRect())) {
+                const int dir = CheckCollisionPointRec(mouse, ui::skinsPrevRect()) ? -1 : 1;
+                skinPage = (skinPage + dir + ui::kSkinPageCount) % ui::kSkinPageCount;
+                const int slot = settings.skin % ui::kSkinPerPage;
+                settings.skin = std::min(skinPage * ui::kSkinPerPage + slot, kSkinCount - 1);
+                audio.play(SfxId::MenuClick);
+                persistSettings();
+                return;
+            }
+            for (int slot = 0; slot < ui::kSkinPerPage; ++slot) {
+                const int index = skinPage * ui::kSkinPerPage + slot;
+                if (index >= kSkinCount) {
+                    break;
+                }
+                if (CheckCollisionPointRec(mouse, ui::skinCardRect(slot))) {
                     audio.play(SfxId::MenuClick);
-                    settings.skin = i;
+                    settings.skin = index;
                     persistSettings();
                     return;
                 }
@@ -353,6 +385,7 @@ void Game::handleUi(const Vector2& mouse, bool down, bool pressed) {
             } else if (CheckCollisionPointRec(mouse, ui::menuSkinsRect())) {
                 audio.play(SfxId::MenuClick);
                 settingsReturn = Mode::Menu;
+                skinPage = settings.skin / ui::kSkinPerPage;
                 mode = Mode::Skins;
                 transitionT = animations ? 1.0f : 0.0f;
             } else if (CheckCollisionPointRec(mouse, ui::menuHighScoresRect())) {

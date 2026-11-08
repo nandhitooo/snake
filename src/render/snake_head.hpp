@@ -1,6 +1,8 @@
 #pragma once
 
+#include "game/skins.hpp"
 #include "raylib.h"
+#include "render/translucent.hpp"
 
 namespace snake {
 
@@ -21,10 +23,11 @@ struct HeadPose {
     float gazeFwd = 0.0f;          // -1..1 pupil offset along `fwd`
     Color head{130, 225, 140, 255};
     Color eye{18, 26, 22, 255};
-    bool crown = false;
+    Accessory accessory = Accessory::None;
 };
 
-// Draws the whole head: skull, mouth/jaw, eyes, blush, smile, tongue and crown.
-void drawSnakeHead(const HeadPose& pose);
+// Draws the whole head: skull, mouth/jaw, eyes, blush, smile, tongue and accessory.
+// `queue` may be null; a translucent accessory (halo) uses it when provided.
+void drawSnakeHead(const HeadPose& pose, render::TranslucentQueue* queue = nullptr);
 
 } // namespace snake
